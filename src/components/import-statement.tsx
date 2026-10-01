@@ -114,7 +114,7 @@ export function ImportStatement({ accounts }: { accounts: { id: number; name: st
           {rows.map((r, i) => (
             <li key={i} className={`flex flex-wrap items-center gap-x-3 gap-y-1 py-2 text-sm ${r.keep ? "" : "opacity-40"}`}>
               <input type="checkbox" checked={r.keep} onChange={(e) => update(i, { keep: e.target.checked })} />
-              <span className="w-20 text-muted">{formatShortDate(r.date)}</span>
+              <span className="w-24 shrink-0 text-muted">{formatShortDate(r.date)}</span>
               <span className="min-w-0 flex-1 truncate" title={r.description}>
                 {r.description}
                 {r.note && <span className="text-muted"> · {r.note}</span>}
@@ -160,8 +160,8 @@ export function ImportStatement({ accounts }: { accounts: { id: number; name: st
         (e.g. all the screenshots of one account); repeated movements across screenshots are only counted once. You
         review everything before it&apos;s saved.
       </p>
-      <div className="mt-3 flex flex-col gap-2 sm:flex-row">
-        <select value={accountId} onChange={(e) => setAccountId(e.target.value)} className="field sm:w-56">
+      <div className="mt-3 flex flex-col gap-2">
+        <select value={accountId} onChange={(e) => setAccountId(e.target.value)} className="field">
           <option value="">Account (optional now)</option>
           {accounts.map((a) => (
             <option key={a.id} value={a.id}>
@@ -177,9 +177,9 @@ export function ImportStatement({ accounts }: { accounts: { id: number; name: st
             addFiles(e.target.files);
             e.target.value = "";
           }}
-          className="field flex-1"
+          className="field"
         />
-        <button className="btn" onClick={read} disabled={files.length === 0 || reading}>
+        <button className="btn self-end" onClick={read} disabled={files.length === 0 || reading}>
           {reading
             ? "Reading… (up to a few minutes)"
             : files.length > 1

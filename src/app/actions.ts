@@ -6,6 +6,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { AUTH_COOKIE, authEnabled, sessionToken } from "@/lib/auth";
 import { isEntityKind, parseEntity } from "@/lib/entities";
+import { clearFailures, clientIp, lockedMinutes, passcodeMatches, recordFailure } from "@/lib/login-guard";
 import {
   deleteConversation,
   deleteEntity,
@@ -176,13 +177,25 @@ export async function deleteConversationAction(id: number) {
 
 export async function loginAction(_prev: FormState, form: FormData): Promise<FormState> {
   if (!authEnabled()) redirect("/");
-  if (String(form.get("passcode") ?? "") !== process.env.APP_PASSCODE) return { error: "Wrong passcode" };
+  const hdrs = await headers();
+  const ip = clientIp(hdrs);
+  const wait = await lockedMinutes(ip);
+  if (wait) return { error: `Too many wrong attempts. Try again in ${wait} minute${wait === 1 ? "" : "s"}.` };
+  if (!passcodeMatches(String(form.get("passcode") ?? ""), process.env.APP_PASSCODE ?? "")) {
+    const { locked, triesLeft } = await recordFailure(ip);
+    return {
+      error: locked
+        ? "Too many wrong attempts. Try again in 15 minutes."
+        : `Wrong passcode. ${triesLeft} ${triesLeft === 1 ? "try" : "tries"} left before a 15-minute lockout.`,
+    };
+  }
+  await clearFailures(ip);
   const jar = await cookies();
   jar.set(AUTH_COOKIE, await sessionToken(), {
     httpOnly: true,
     sameSite: "lax",
     // Secure only over HTTPS, so logging in over plain http on your home network still works.
-    secure: (await headers()).get("x-forwarded-proto") === "https",
+    secure: hdrs.get("x-forwarded-proto") === "https",
     maxAge: 60 * 60 * 24 * 90,
     path: "/",
   });

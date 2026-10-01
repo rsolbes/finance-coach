@@ -112,13 +112,15 @@ export function RecordPayment(props: {
           Upload the receipt (comprobante) of a card or loan payment as a PDF or screenshot. Balances, installments and
           due dates update when you save.
         </p>
-        <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+        <div className="mt-3 flex flex-col gap-2">
           <input
             type="file"
             accept="application/pdf,image/png,image/jpeg,image/webp"
             onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-            className="field flex-1"
+            className="field"
           />
+        </div>
+        <div className="mt-2 flex flex-wrap justify-end gap-2">
           <button className="btn" onClick={read} disabled={!file || reading}>
             {reading ? "Reading…" : "Read receipt"}
           </button>

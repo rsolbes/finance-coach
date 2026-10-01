@@ -92,7 +92,7 @@ export default async function Dashboard() {
             <ul className="divide-y divide-border">
               {next3Weeks.map((r, i) => (
                 <li key={i} className="flex items-center gap-3 py-2 text-sm">
-                  <span className="w-20 shrink-0 text-muted">{formatShortDate(r.date)}</span>
+                  <span className="w-24 shrink-0 text-muted">{formatShortDate(r.date)}</span>
                   <span className="min-w-0 flex-1 truncate" title={r.label}>
                     {r.label}
                     {r.restricted && <span className="text-muted"> (vouchers)</span>}

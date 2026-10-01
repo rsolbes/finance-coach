@@ -1,76 +1,93 @@
 # Finance Coach
 
-A personal finance app for one person, with a Claude-powered coach that can see your accounts, cards,
-installments (MSI), bills and spending.
+A personal finance app with an AI coach. I built it for my own money in Mexico: weekly pay, credit cards with
+*meses sin intereses* (MSI) installments, small loans, and the question "can I pay everything on time this month?".
 
-- **Today**: cash available, upcoming payments with a running balance, the day money runs short, the months
-  ahead, and when each installment plan ends.
-- **Coach**: chat in Spanish or English. The coach reads your data through tools and does all the math in code.
-  It can log transactions, update balances, save goals and remember things about you.
-- **Spending & payments**:
-  - Import statements: PDFs, screenshots or a CSV. You can upload many files at once (e.g. every screenshot of
-    your banking app's movements); movements repeated across overlapping screenshots are counted once.
-  - Record a payment: upload a receipt (comprobante) or enter it by hand. The card's balance, the installments
-    it covers and its next due date update automatically. You can also just tell the coach "I paid my credit card".
-- **Plan**: edit accounts, cards (fecha de corte), installment plans, bills, income, goals and your profile.
+![Dashboard: cash available, upcoming payments with a running balance, months ahead and when each plan ends](docs/screenshots/dashboard.png)
 
-Your data is stored in `data/coach.db` on your computer (git-ignored), or in Turso if `DATABASE_URL` is set.
+<sub>All screenshots use made-up data.</sub>
 
-## Setup
+## What I built
 
-1. Get a Claude API key at https://platform.claude.com (Settings → API keys) and add some credit.
-2. Copy `.env.example` to `.env.local` and set `ANTHROPIC_API_KEY`.
+**A tool-using AI agent.** The coach is Claude, connected through the Anthropic SDK in a streaming agent loop
+with 15 tools:
+- Reading: accounts, cash flow, monthly projection, spending, goals.
+- Calculating: arithmetic and payoff plans.
+- Changing data: log a transaction, update a balance, record a payment, save a goal, remember a fact.
+
+It looks things up instead of guessing, and it can act ("I paid my card" updates balances and due dates).
+Conversations are stored append-only, and the system prompt is frozen per conversation so prompt caching keeps
+working.
+
+**Math done in code, never by the model.** A small engine of pure, tested functions (`src/lib/engine.ts`)
+handles everything the coach quotes:
+- Each card's *fecha límite de pago*, worked out from its *fecha de corte* (statement day).
+- How much of a card balance is MSI, so you know what must be paid in full.
+- Installment schedules.
+- A running cash balance through every payday and payment.
+- When each plan ends, and how much that frees up.
+
+When the coach needs arithmetic, it calls a `calculate` tool.
+
+![Coach planning payments paycheck by paycheck](docs/screenshots/coach.png)
+
+**Statement and receipt extraction.** Mexican banks rarely export CSV, so the app reads what you have:
+- **Formats:** PDF statements, phone screenshots, or CSV.
+- **One request per batch:** several screenshots are read together, with structured output validated by a Zod
+  schema. Movements that repeat across overlapping screenshots are counted once.
+- **Smaller uploads:** images are downscaled in the browser first.
+- **Review first:** you check everything before it's saved.
+- **Payment receipts** (*comprobantes*) update the card balance, mark the covered installments as paid, and
+  move the next due date. A duplicate guard keeps the same receipt from counting twice.
+
+![Reviewing transactions read from a statement](docs/screenshots/statement-review.png)
+
+**An installable phone app (PWA).** It's mobile-first, has its own home-screen icon, and works in Safari on
+iPhone through "Add to Home Screen". It's protected by a passcode with a lockout after repeated wrong attempts.
+
+<p align="center"><img src="docs/screenshots/mobile.png" alt="The dashboard on a phone" width="300"></p>
+
+![Spending by category and the transaction list](docs/screenshots/spending.png)
+
+## Stack
+
+Next.js 16 (App Router, Server Actions) · React 19 · TypeScript · Tailwind CSS 4 · Anthropic TypeScript SDK
+(Claude Sonnet 5.5 by default) · Zod · libSQL (a local SQLite file, or Turso when hosted) · Vitest.
+
+## Run it
+
+1. Get a Claude API key at [platform.claude.com](https://platform.claude.com).
+2. Copy `.env.example` to `.env.local` and set `ANTHROPIC_API_KEY`. Optionally set `APP_PASSCODE` too.
 3. Run:
 
-   ```bash
-   npm install
-   npm run dev
-   ```
-
-4. Open http://localhost:3000.
-
-The database is created the first time the app runs. If `data/seed.json` exists (git-ignored, so your
-personal data never goes into the code), an empty database is filled from it; otherwise add your accounts on the
-Plan page. Anything marked **CONFIRM** in the notes is an assumption; the dashboard lists those until you fix them.
-
-## Using it from your iPhone
-
-On the same Wi-Fi as your PC:
-
-1. Set `APP_PASSCODE` in `.env.local` (anyone on your network could otherwise open it).
-2. Run `npm run dev:phone`, then find your PC's IP address with `ipconfig` (e.g. `192.168.1.20`).
-3. On the iPhone open Safari at `http://192.168.1.20:3000`, then Share → **Add to Home Screen**.
-
-Windows Firewall may ask to allow Node.js on private networks; allow it. To use it away from home, deploy it
-(e.g. Vercel) with a hosted database: set `DATABASE_URL` / `DATABASE_AUTH_TOKEN` to a Turso database and set
-`APP_PASSCODE`.
-
-## Hosting (use it from anywhere)
-
-With Turso already set up, the app can run on Vercel's free Hobby plan:
-
-1. Push the project to a private GitHub repo and import it at vercel.com.
-2. In the Vercel project settings, add the variables from `.env.local` (`ANTHROPIC_API_KEY`, `APP_PASSCODE`,
-   `DATABASE_URL`, `DATABASE_AUTH_TOKEN`, `COACH_MODEL`).
-3. Deploy, then open the `*.vercel.app` URL on your iPhone and Add to Home Screen.
-
-Once it's on the internet the passcode is the only lock, so make it long. Vercel limits uploads to about 4.5 MB per
-request: screenshots are shrunk automatically, but split large PDFs into smaller batches.
-
-## Cost
-
-Each coach reply costs roughly $0.05–0.20 USD on Claude Opus 5.5 (it makes a few tool calls per reply). Reading a
-statement costs about $0.05–0.25. For normal personal use that's a few dollars a month. Set
-`COACH_MODEL=claude-sonnet-5-5` for about half the price.
-
-## Development
-
 ```bash
-npm test        # engine + coach tool tests
-npx tsc --noEmit
-npm run lint
+npm install
+npm run dev
 ```
 
-- `src/lib/engine.ts`: all financial calculations (cash flow, card statements, installment schedules).
-- `src/lib/coach/`: the coach's system prompt and tools.
-- `src/app/api/chat`: streaming chat with the tool loop. `src/app/api/import`: statement extraction.
+Then open http://localhost:3000 and add your accounts, cards and installments on the **Plan** page.
+
+**To host it,** deploy to Vercel with a free [Turso](https://turso.tech) database. Set `DATABASE_URL`,
+`DATABASE_AUTH_TOKEN` and `APP_PASSCODE` in the project settings. Uploads are limited to about 4.5 MB per
+request there, so split large PDFs.
+
+**Privacy:** your data lives only in your database. Optional starting data goes in `data/seed.json`, which is
+git-ignored. Text you send to the coach, and the statements you upload, are processed by the Claude API.
+
+## Code map
+
+| Path | What's there |
+|---|---|
+| `src/lib/engine.ts` | Cash flow, card due dates, installment schedules, projections |
+| `src/lib/payments.ts` | What a payment changes (balances, installments, due dates) |
+| `src/lib/coach/` | The coach's system prompt and tools |
+| `src/app/api/chat` | Streaming agent loop |
+| `src/app/api/import`, `src/app/api/receipt` | Statement and receipt extraction |
+
+```bash
+npm test    # 27 tests: engine, payments, coach tools, login lockout
+```
+
+## License
+
+MIT
