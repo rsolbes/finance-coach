@@ -9,6 +9,6 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  // Everything except the login page, Next internals and the PWA/icon files.
-  matcher: ["/((?!login|_next/|favicon.ico|icon|apple-icon|manifest.webmanifest).*)"],
+  // Everything except the login page, Next and Vercel internals (incl. analytics) and the PWA/icon files.
+  matcher: ["/((?!login|_next/|_vercel/|favicon.ico|icon|apple-icon|manifest.webmanifest).*)"],
 };
