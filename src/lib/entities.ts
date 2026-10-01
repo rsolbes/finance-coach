@@ -90,7 +90,12 @@ export const ENTITIES = {
       { name: "name", label: "Name", type: "text", required: true },
       { name: "amount", label: "Amount", type: "number", required: true },
       { name: "day_of_month", label: "Day of month", type: "int", required: true, min: 1, max: 31 },
-      { name: "account_id", label: "Paid from", type: "account" },
+      {
+        name: "account_id",
+        label: "Paid from",
+        type: "account",
+        help: "Pick the credit card if it's charged to one: it's then paid with that card's statement, not on this day.",
+      },
       { name: "category", label: "Category", type: "select", options: CATEGORIES, required: true },
       { name: "is_estimate", label: "Amount/date is an estimate", type: "checkbox" },
       { name: "notes", label: "Notes", type: "textarea" },

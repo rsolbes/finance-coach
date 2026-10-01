@@ -9,6 +9,7 @@ import {
   revolvingBalance,
   revolvingDueDate,
   snapshot,
+  statementDueForCharge,
 } from "./engine";
 
 const data = fixtureData();
@@ -65,6 +66,31 @@ describe("credit cards", () => {
   it("splits MSI by the original amount, not the rounded payment", () => {
     const odd = { ...data, plans: [{ ...data.plans[1], original_amount: 4645.23, payment_amount: 309.68 }] };
     expect(revolvingBalance(odd, { ...cardA, balance: 5000 }, TODAY)).toBe(354.77);
+  });
+});
+
+describe("bills paid with a credit card", () => {
+  const withCardBill = (day: number) => ({
+    ...data,
+    bills: data.bills.map((b) => (b.name === "Gym" ? { ...b, day_of_month: day, account_id: account("Card A").id } : b)),
+  });
+  const gymDates = (d: typeof data) =>
+    cashTimeline(d, TODAY, 70).rows.filter((r) => r.label.startsWith("Gym")).map((r) => r.date);
+
+  it("count on the card's due date, not the charge date", () => {
+    // Card A: corte day 7, due 20 days later. Charged Oct 28 -> Nov 7 statement -> due Nov 27.
+    expect(gymDates(withCardBill(28))).toEqual(["2026-11-27"]);
+    expect(statementDueForCharge(account("Card A"), "2026-10-28")).toBe("2026-11-27");
+  });
+
+  it("include a charge made on the cut day in that statement", () => {
+    expect(statementDueForCharge(account("Card A"), "2026-10-07")).toBe("2026-10-27");
+    expect(gymDates(withCardBill(7))).toEqual(["2026-10-27", "2026-11-27"]);
+  });
+
+  it("skip charges before today, which are already in the card balance", () => {
+    // A Sept 28 charge would be due Oct 27, but it's already part of the card's current balance.
+    expect(gymDates(withCardBill(28))).not.toContain("2026-10-27");
   });
 });
 

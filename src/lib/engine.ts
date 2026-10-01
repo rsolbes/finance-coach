@@ -118,6 +118,14 @@ export function revolvingDueDate(account: Account, today: string): string | null
   return addDays(nextCut, offset);
 }
 
+/** Due date of the statement that will include a charge made on `charge` (a charge on the cut day is included). */
+export function statementDueForCharge(account: Account, charge: string): string | null {
+  if (account.type !== "credit" || !account.statement_day) return null;
+  let cut = withDayOfMonth(charge, account.statement_day);
+  if (cut < charge) cut = withDayOfMonth(addMonths(startOfMonth(charge), 1), account.statement_day);
+  return addDays(cut, account.payment_due_days ?? 20);
+}
+
 /** Card balance that is NOT installments, i.e. what must be paid in full to avoid interest. */
 export function revolvingBalance(data: FinanceData, account: Account, today: string): number {
   if (account.type !== "credit") return 0;
@@ -155,20 +163,33 @@ function incomeEvents(data: FinanceData, inc: IncomeSource, from: string, to: st
   return out;
 }
 
-function billEvents(data: FinanceData, bill: RecurringBill, from: string, to: string): MoneyEvent[] {
+/**
+ * A bill paid with a credit card is cash out on that card's due date, not on the charge date.
+ * Charges before today are already in the card's balance (and its statement event).
+ */
+function billEvents(data: FinanceData, bill: RecurringBill, from: string, to: string, today: string): MoneyEvent[] {
   const out: MoneyEvent[] = [];
-  for (let m = startOfMonth(from); m <= to; m = addMonths(m, 1)) {
-    const date = withDayOfMonth(m, bill.day_of_month);
-    if (date >= from && date <= to)
-      out.push({
-        date,
-        kind: "bill",
-        label: bill.is_estimate ? `${bill.name} (estimated)` : bill.name,
-        amount: bill.amount,
-        account: accountName(data, bill.account_id),
-        restricted: false,
-        ref: `bill:${bill.id}`,
-      });
+  const card = data.accounts.find((a) => a.id === bill.account_id && a.type === "credit" && a.statement_day);
+  // A card charge can be due up to ~2 months later, so start earlier to catch charges due in the window.
+  const start = card ? addMonths(startOfMonth(from), -2) : startOfMonth(from);
+  for (let m = start; m <= to; m = addMonths(m, 1)) {
+    const charge = withDayOfMonth(m, bill.day_of_month);
+    let date = charge;
+    if (card) {
+      if (charge < today) continue;
+      date = statementDueForCharge(card, charge) ?? charge;
+    }
+    if (date < from || date > to) continue;
+    const name = bill.is_estimate ? `${bill.name} (estimated)` : bill.name;
+    out.push({
+      date,
+      kind: "bill",
+      label: card ? `${name} (on ${card.name})` : name,
+      amount: bill.amount,
+      account: accountName(data, bill.account_id),
+      restricted: false,
+      ref: `bill:${bill.id}`,
+    });
   }
   return out;
 }
@@ -176,7 +197,7 @@ function billEvents(data: FinanceData, bill: RecurringBill, from: string, to: st
 export function eventsBetween(data: FinanceData, from: string, to: string, today: string): MoneyEvent[] {
   const events: MoneyEvent[] = [];
   for (const inc of data.incomes.filter((i) => i.active)) events.push(...incomeEvents(data, inc, from, to));
-  for (const bill of data.bills.filter((b) => b.active)) events.push(...billEvents(data, bill, from, to));
+  for (const bill of data.bills.filter((b) => b.active)) events.push(...billEvents(data, bill, from, to, today));
   for (const plan of data.plans.filter((p) => p.active)) {
     for (const p of planSchedule(plan, today)) {
       if (p.date < from || p.date > to) continue;

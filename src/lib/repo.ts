@@ -142,6 +142,7 @@ export async function setAccountBalance(id: number, balance: number, nextDueDate
 // ---------- transactions ----------
 
 export interface TransactionFilter {
+  id?: number;
   from?: string;
   to?: string;
   category?: string;
@@ -157,6 +158,7 @@ export async function listTransactions(f: TransactionFilter = {}): Promise<Trans
     where.push(clause);
     args.push(...values);
   };
+  if (f.id) add("id = ?", f.id);
   if (f.from) add("date >= ?", f.from);
   if (f.to) add("date <= ?", f.to);
   if (f.category) add("category = ?", f.category);
@@ -191,6 +193,20 @@ export async function insertTransactions(list: NewTransaction[]): Promise<{ inse
 
 export async function updateTransactionCategory(id: number, category: Category) {
   await run("UPDATE transactions SET category = ? WHERE id = ?", [category, id]);
+}
+
+export type TransactionChanges = Partial<Pick<Transaction, "date" | "description" | "amount" | "category" | "notes" | "account_id">>;
+
+/** Changes only the given columns; returns the updated row, or null if it doesn't exist. */
+export async function updateTransaction(id: number, changes: TransactionChanges): Promise<Transaction | null> {
+  const cols = (Object.keys(changes) as (keyof TransactionChanges)[]).filter((k) => changes[k] !== undefined);
+  if (cols.length)
+    await run(`UPDATE transactions SET ${cols.map((c) => `${c} = ?`).join(", ")} WHERE id = ?`, [
+      ...cols.map((c) => changes[c] ?? null),
+      id,
+    ]);
+  const rows = await query("SELECT * FROM transactions WHERE id = ?", [id]);
+  return rows.length ? toTransaction(rows[0]) : null;
 }
 
 export async function deleteTransaction(id: number) {

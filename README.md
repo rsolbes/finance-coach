@@ -10,12 +10,15 @@ A personal finance app with an AI coach. I built it for my own money in Mexico: 
 ## What I built
 
 **A tool-using AI agent.** The coach is Claude, connected through the Anthropic SDK in a streaming agent loop
-with 15 tools:
-- Reading: accounts, cash flow, monthly projection, spending, goals.
+with 18 tools:
+- Reading: accounts, cash flow, monthly projection, spending, transactions, every record on the plan.
 - Calculating: arithmetic and payoff plans.
-- Changing data: log a transaction, update a balance, record a payment, save a goal, remember a fact.
+- Changing data: anything you can change in the app, including accounts and cards, installment plans, bills,
+  income, goals, transactions, payments, your profile and its memory. Edits go through the same validation as
+  the forms.
 
-It looks things up instead of guessing, and it can act ("I paid my card" updates balances and due dates).
+It looks things up instead of guessing, and it can act: "I paid my card" updates balances and due dates, and "the
+gym is charged to my card on the 28th" moves that bill onto the card's statement.
 Conversations are stored append-only, and the system prompt is frozen per conversation so prompt caching keeps
 working.
 
@@ -85,7 +88,7 @@ git-ignored. Text you send to the coach, and the statements you upload, are proc
 | `src/app/api/import`, `src/app/api/receipt` | Statement and receipt extraction |
 
 ```bash
-npm test    # 27 tests: engine, payments, coach tools, login lockout
+npm test    # 31 tests: engine, payments, coach tools, login lockout
 ```
 
 ## License

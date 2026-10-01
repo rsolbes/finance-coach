@@ -3,22 +3,23 @@ import type Anthropic from "@anthropic-ai/sdk";
 import { z } from "zod";
 import { evaluate } from "../calc";
 import { addMonths, startOfMonth, todayISO } from "../dates";
-import { cashTimeline, monthlyProjection, planStatus, revolvingBalance, revolvingDueDate, snapshot } from "../engine";
+import { cashTimeline, monthlyProjection, revolvingBalance, revolvingDueDate, snapshot } from "../engine";
 import {
   addMemory,
   deleteMemory,
+  deleteTransaction,
   insertTransactions,
-  listGoals,
   listMemories,
   listTransactions,
   loadFinanceData,
-  saveEntity,
-  setAccountBalance,
+  setSetting,
+  updateTransaction,
 } from "../repo";
+import { deleteRecord, describeRecordFields, listRecords, RECORD_KINDS, saveRecord } from "./records";
 import { paymentTargets } from "../payments";
 import { recordPayment } from "../record-payment";
 import { spendingSummary } from "../spending";
-import { CATEGORIES, GOAL_KINDS, GOAL_STATUSES } from "../types";
+import { CATEGORIES } from "../types";
 
 const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Use YYYY-MM-DD");
 
@@ -48,6 +49,12 @@ const TOOLS = [
         accounts: data.accounts
           .filter((a) => a.active)
           .map((a) => ({ id: a.id, name: a.name, type: a.type, balance: a.balance, notes: a.notes })),
+        bills: data.bills
+          .filter((b) => b.active)
+          .map((b) => ({ id: b.id, name: b.name, amount: b.amount, day_of_month: b.day_of_month, account_id: b.account_id })),
+        incomes: data.incomes
+          .filter((i) => i.active)
+          .map((i) => ({ id: i.id, name: i.name, amount: i.amount, frequency: i.frequency })),
       };
     },
   }),
@@ -135,43 +142,47 @@ const TOOLS = [
     },
   }),
   tool({
-    name: "list_goals",
-    description: "The user's goals (savings targets, debts to pay off, spending limits, habits).",
-    input: z.object({ status: z.enum(GOAL_STATUSES).optional() }),
-    run: async ({ status }) => listGoals(status),
+    name: "list_records",
+    description:
+      "All records of one kind with their ids and every field: accounts (cards, debit, wallets, vouchers), plans " +
+      "(installments and loans), bills (recurring payments), incomes, or goals. Use it before changing a record.",
+    input: z.object({ kind: z.enum(RECORD_KINDS) }),
+    run: async ({ kind }) => listRecords(kind),
   }),
   tool({
-    name: "save_goal",
+    name: "save_record",
     description:
-      "Create a goal, or update one by id (e.g. new progress or status). Only after the user agrees to the goal.",
+      "Create a record (leave out id) or change an existing one (give its id; only the fields you pass change). " +
+      "This is how you edit anything on the user's Plan page: accounts and cards (balance, fecha de corte, next due " +
+      "date...), installment plans, recurring bills, income and goals. Fields per kind (* = required for new records):\n" +
+      describeRecordFields() +
+      "\nNotes: a credit card's balance is what's owed, as a positive number. A bill whose account_id is a credit " +
+      "card is counted on that card's payment due date, not on the charge day. To mark a payment as made, use " +
+      "record_payment instead of editing a plan. Do what the user asks; if you are inferring a change, confirm first.",
     input: z.object({
+      kind: z.enum(RECORD_KINDS),
       id: z.number().int().positive().optional(),
-      title: z.string().min(1).max(200),
-      kind: z.enum(GOAL_KINDS),
-      target_amount: z.number().nullable().optional(),
-      current_amount: z.number().nullable().optional(),
-      category: z.enum(CATEGORIES).nullable().optional().describe("For spending_limit goals"),
-      target_date: isoDate.nullable().optional(),
-      status: z.enum(GOAL_STATUSES).optional(),
-      notes: z.string().max(2000).optional(),
+      fields: z.record(z.string(), z.union([z.string(), z.number(), z.boolean(), z.null()])),
     }),
-    run: async ({ id, ...g }) => {
-      const saved = await saveEntity(
-        "goals",
-        {
-          title: g.title,
-          kind: g.kind,
-          target_amount: g.target_amount ?? null,
-          current_amount: g.current_amount ?? null,
-          category: g.category ?? null,
-          target_date: g.target_date ?? null,
-          status: g.status ?? "active",
-          notes: g.notes ?? "",
-        },
-        id,
-      );
-      return { saved: true, id: saved };
+    run: async ({ kind, id, fields }) => {
+      const result = await saveRecord(kind, id, fields);
+      if (kind !== "accounts" || !("saved" in result)) return result;
+      // For cards, show what the change means for what's due.
+      const data = await loadFinanceData();
+      const acc = data.accounts.find((a) => a.id === result.id);
+      const today = todayISO();
+      return acc?.type === "credit"
+        ? { ...result, to_pay_in_full_now: revolvingBalance(data, acc, today), next_due: revolvingDueDate(acc, today) }
+        : result;
     },
+  }),
+  tool({
+    name: "delete_record",
+    description:
+      "Permanently delete an account, plan, bill, income or goal. Only when the user explicitly asks or confirms. " +
+      "Prefer save_record with active=false (or a goal status of dropped) so history is kept.",
+    input: z.object({ kind: z.enum(RECORD_KINDS), id: z.number().int().positive() }),
+    run: async ({ kind, id }) => deleteRecord(kind, id),
   }),
   tool({
     name: "log_transaction",
@@ -199,37 +210,41 @@ const TOOLS = [
       ]),
   }),
   tool({
-    name: "update_account_balance",
+    name: "update_transaction",
     description:
-      "Set an account's current balance when the user tells you a new figure. Debit: money available. Credit card: " +
-      "total owed as a positive number. For a credit card you can also set next_due_date (fecha límite of the next " +
-      "payment), e.g. after the user pays the current statement or tells you the due date. Get account ids from " +
-      "get_financial_overview.",
+      "Fix a transaction by id (from search_transactions): date, description, amount (negative = money out), " +
+      "category, notes or account. Only the fields you pass change.",
     input: z.object({
-      account_id: z.number().int().positive(),
-      balance: z.number(),
-      next_due_date: isoDate.nullable().optional().describe("Credit cards only. Leave out to keep the current one."),
+      id: z.number().int().positive(),
+      date: isoDate.optional(),
+      description: z.string().min(1).max(300).optional(),
+      amount: z.number().optional(),
+      category: z.enum(CATEGORIES).optional(),
+      notes: z.string().max(500).optional(),
+      account_id: z.number().int().positive().nullable().optional(),
     }),
-    run: async ({ account_id, balance, next_due_date }) => {
-      const data = await loadFinanceData();
-      const acc = data.accounts.find((a) => a.id === account_id);
-      if (!acc) return { error: `No account with id ${account_id}` };
-      const dueDate = next_due_date === undefined ? acc.next_due_date : next_due_date;
-      await setAccountBalance(account_id, balance, dueDate);
-      const changed = { ...acc, balance, next_due_date: dueDate };
-      const updated = { ...data, accounts: data.accounts.map((a) => (a.id === account_id ? changed : a)) };
-      const today = todayISO();
-      return {
-        updated: acc.name,
-        balance,
-        ...(acc.type === "credit" && {
-          revolving_balance_now: revolvingBalance(updated, changed, today),
-          revolving_due: revolvingDueDate(changed, today),
-          plans_on_card: updated.plans
-            .filter((p) => p.active && p.account_id === acc.id)
-            .map((p) => planStatus(updated, p, today)),
-        }),
-      };
+    run: async ({ id, ...changes }) => (await updateTransaction(id, changes)) ?? { error: `No transaction with id ${id}` },
+  }),
+  tool({
+    name: "delete_transaction",
+    description: "Delete a transaction by id (e.g. a duplicate). Only when the user asks or confirms.",
+    input: z.object({ id: z.number().int().positive() }),
+    run: async ({ id }) => {
+      const [t] = await listTransactions({ id, limit: 1 });
+      if (!t) return { error: `No transaction with id ${id}` };
+      await deleteTransaction(id);
+      return { deleted: true, was: t };
+    },
+  }),
+  tool({
+    name: "set_profile",
+    description:
+      "Replace the user's profile (\"What the coach knows about you\" on the Plan page), used in new conversations. " +
+      "Start from the current profile in your instructions and keep what is still true. For single facts, prefer remember.",
+    input: z.object({ profile: z.string().min(1).max(8000) }),
+    run: async ({ profile }) => {
+      await setSetting("profile", profile);
+      return { saved: true };
     },
   }),
   tool({
@@ -291,10 +306,13 @@ export const TOOL_LABELS: Record<string, string> = {
   search_transactions: "Searching transactions",
   calculate: "Calculating",
   plan_payoff: "Building a payoff plan",
-  list_goals: "Looking at your goals",
-  save_goal: "Saving a goal",
+  list_records: "Looking at your plan",
+  save_record: "Updating your plan",
+  delete_record: "Removing an item",
   log_transaction: "Logging a transaction",
-  update_account_balance: "Updating a balance",
+  update_transaction: "Fixing a transaction",
+  delete_transaction: "Removing a transaction",
+  set_profile: "Updating your profile",
   list_payment_targets: "Looking at what's due",
   record_payment: "Recording your payment",
   remember: "Remembering this",
