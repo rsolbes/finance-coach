@@ -79,7 +79,9 @@ const TOOLS = [
     name: "get_spending_summary",
     description:
       "Spending from imported/logged transactions between two dates: total, by category, top merchants. Card " +
-      "payments and transfers between own accounts are excluded. Returns transactions: 0 if no data was imported.",
+      "payments and transfers between own accounts are excluded. Purchases made a meses (installment_purchase) are " +
+      "not in total_spent; they're listed in financed_in_installments, because their cost is counted monthly " +
+      "through the installment plans. Returns transactions: 0 if no data was imported.",
     input: z.object({ from: isoDate, to: isoDate }),
     run: async ({ from, to }) => spendingSummary(await listTransactions({ from, to, limit: 5000 }), from, to),
   }),

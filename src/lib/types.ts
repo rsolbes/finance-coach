@@ -32,6 +32,7 @@ export const CATEGORIES = [
   "gifts",
   "fees_interest",
   "installment_payment",
+  "installment_purchase",
   "card_payment",
   "transfer",
   "cash_withdrawal",
@@ -40,8 +41,11 @@ export const CATEGORIES = [
 ] as const;
 export type Category = (typeof CATEGORIES)[number];
 
-/** Movements that only move money between your own accounts; excluded from spending totals. */
-export const NON_SPENDING_CATEGORIES: readonly Category[] = ["card_payment", "transfer", "income"];
+/**
+ * Excluded from spending totals: movements between your own accounts, and purchases made "a meses"
+ * (their cost is counted month by month through the installment plan instead).
+ */
+export const NON_SPENDING_CATEGORIES: readonly Category[] = ["card_payment", "transfer", "income", "installment_purchase"];
 
 export interface Account {
   id: number;

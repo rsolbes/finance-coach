@@ -21,7 +21,10 @@ Extract every transaction (movimiento). Rules:
 - amount: negative for money out (purchases, cargos, retiros, comisiones, intereses, IVA), positive for money in (abonos, depósitos, pagos received by a credit card, refunds).
 - On a credit card statement, a payment you made to the card ("PAGO", "SU PAGO GRACIAS") is positive with category card_payment.
 - On a debit account, money sent to pay one of your own credit cards or to your own accounts is negative with category card_payment or transfer.
-- Monthly installment charges of MSI or meses con intereses plans: category installment_payment, and put the plan progress (e.g. "3 de 12") in note.
+- Purchases made in installments ("a meses", "a N meses", "MSI", "meses sin intereses", "promoción aplicada" on a purchase): the full purchase amount, once. Category installment_purchase, and put the number of months in note if shown (e.g. "12 MSI"). This is NOT an installment payment.
+- Monthly installment charges of an existing plan (e.g. "MENSUALIDAD 3 DE 12", "PAGO DIFERIDO 2/6", "cargo de meses sin intereses"): category installment_payment, and put the plan progress (e.g. "3 de 12") in note.
+- "En tránsito" / "pendiente" only means the movement hasn't posted yet: keep it, and add "pending" to note.
+- Small card-verification charges (e.g. "validación", "verificación", "AMAZONVALIDACION"): category other, note "verification charge, usually reversed".
 - Interest, commissions and their IVA: category fees_interest.
 - Salary/nómina deposits: category income.
 - Pick the closest category for everything else from: ${CATEGORIES.join(", ")}.

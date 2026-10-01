@@ -56,6 +56,14 @@ export default async function SpendingPage({ searchParams }: PageProps<"/spendin
           <p className="text-sm text-muted">
             {summary.transactions} transactions · {money(summary.daily_average_spent)} per day
           </p>
+          {summary.financed_in_installments.total > 0 && (
+            <p className="mt-2 rounded-lg bg-surface-2 p-2 text-xs text-muted">
+              + {money(summary.financed_in_installments.total)} bought a meses (
+              {summary.financed_in_installments.purchases.length}{" "}
+              {summary.financed_in_installments.purchases.length === 1 ? "purchase" : "purchases"}). Not counted here: you
+              pay it month by month through your installment plans.
+            </p>
+          )}
           {summary.by_category.length > 0 && (
             <ul className="mt-4 flex flex-col gap-2">
               {summary.by_category.map((c) => (

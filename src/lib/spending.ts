@@ -11,6 +11,8 @@ export interface SpendingSummary {
   daily_average_spent: number;
   by_category: { category: string; amount: number; pct: number; count: number }[];
   top_merchants: { merchant: string; amount: number; count: number }[];
+  /** Purchases made "a meses" this period: new installment debt, not part of total_spent. */
+  financed_in_installments: { total: number; purchases: { date: string; description: string; amount: number }[] };
 }
 
 /** Rough merchant key: "OXXO SUC 1234 MTY" and "OXXO SUC 998" both become "OXXO SUC". */
@@ -60,5 +62,12 @@ export function spendingSummary(txs: Transaction[], from: string, to: string): S
     top_merchants: group((t) => merchantKey(t.description))
       .slice(0, 12)
       .map(([merchant, v]) => ({ merchant, amount: round2(v.amount), count: v.count })),
+    financed_in_installments: (() => {
+      const msi = inRange.filter((t) => t.category === "installment_purchase" && t.amount < 0);
+      return {
+        total: round2(msi.reduce((a, t) => a - t.amount, 0)),
+        purchases: msi.map((t) => ({ date: t.date, description: t.description, amount: round2(-t.amount) })),
+      };
+    })(),
   };
 }

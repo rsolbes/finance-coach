@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { fixtureData, TODAY } from "../test/fixture";
 import { evaluate } from "./calc";
+import { spendingSummary } from "./spending";
+import type { Transaction } from "./types";
 import { addMonths } from "./dates";
 import {
   cashTimeline,
@@ -130,6 +132,38 @@ describe("cash flow", () => {
     expect(s.monthly_income).toBe(13000); // 3,000 x 52 / 12
     expect(s.monthly_restricted_income).toBe(1083.33);
     expect(s.needs_confirmation).toEqual([{ item: "Gym", note: "CONFIRM: day of the month." }]);
+  });
+});
+
+describe("spending", () => {
+  const tx = (date: string, description: string, amount: number, category: Transaction["category"]): Transaction => ({
+    id: 0,
+    account_id: null,
+    date,
+    description,
+    amount,
+    category,
+    notes: "",
+    source: "test",
+    created_at: "",
+  });
+
+  it("keeps purchases made a meses out of the month's spending", () => {
+    const s = spendingSummary(
+      [
+        tx("2026-09-30", "Amazon a meses a 15 meses", -4645.23, "installment_purchase"),
+        tx("2026-09-29", "Amazon a meses", -667.9, "installment_purchase"),
+        tx("2026-09-28", "Farmacia", -889, "health"),
+        tx("2026-09-27", "Mensualidad 1 de 12", -78.75, "installment_payment"),
+        tx("2026-09-25", "Pago tarjeta", -1000, "card_payment"),
+      ],
+      "2026-09-01",
+      "2026-09-30",
+    );
+    expect(s.total_spent).toBe(967.75); // medicine + the monthly installment charge
+    expect(s.financed_in_installments.total).toBe(5313.13);
+    expect(s.financed_in_installments.purchases).toHaveLength(2);
+    expect(s.by_category.map((c) => c.category)).not.toContain("installment_purchase");
   });
 });
 
