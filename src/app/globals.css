@@ -1,26 +1,126 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --bg: #f6f7f5;
+  --surface: #ffffff;
+  --surface-2: #f0f2ee;
+  --border: #e2e5df;
+  --text: #17201b;
+  --muted: #5f6b64;
+  --accent: #0f7b5f;
+  --accent-soft: #e2f3ec;
+  --danger: #c2410c;
+  --danger-soft: #fdeee6;
+  --warn: #a16207;
+  --warn-soft: #fdf5dc;
+  --ok: #15803d;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --bg: #0e1311;
+    --surface: #161d1a;
+    --surface-2: #1e2723;
+    --border: #2a3530;
+    --text: #e8eeea;
+    --muted: #9aa8a0;
+    --accent: #34c79a;
+    --accent-soft: #143429;
+    --danger: #fb923c;
+    --danger-soft: #3a2014;
+    --warn: #facc15;
+    --warn-soft: #352d0e;
+    --ok: #4ade80;
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-border: var(--border);
+  --color-text: var(--text);
+  --color-muted: var(--muted);
+  --color-accent: var(--accent);
+  --color-accent-soft: var(--accent-soft);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+  --color-warn: var(--warn);
+  --color-warn-soft: var(--warn-soft);
+  --color-ok: var(--ok);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
 }
+
+html {
+  color-scheme: light dark;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-sans), system-ui, sans-serif;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.num {
+  font-variant-numeric: tabular-nums;
+}
+
+@layer components {
+/* Form controls */
+.field {
+  width: 100%;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  border-radius: 0.6rem;
+  padding: 0.55rem 0.7rem;
+  font-size: 16px; /* prevents iOS zoom on focus */
+}
+.field:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
+}
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  border-radius: 0.6rem;
+  padding: 0.55rem 0.95rem;
+  font-weight: 600;
+  font-size: 0.9rem;
+  background: var(--accent);
+  color: var(--surface);
+  cursor: pointer;
+}
+.btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.btn-ghost {
+  background: transparent;
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+.btn-danger {
+  background: transparent;
+  color: var(--danger);
+  border: 1px solid var(--border);
+}
+
+}
+
+/* Chat markdown */
+.prose-chat p { margin: 0.5em 0; }
+.prose-chat ul, .prose-chat ol { margin: 0.5em 0; padding-left: 1.3em; }
+.prose-chat ul { list-style: disc; }
+.prose-chat ol { list-style: decimal; }
+.prose-chat li { margin: 0.2em 0; }
+.prose-chat strong { font-weight: 650; }
+.prose-chat h1, .prose-chat h2, .prose-chat h3 { font-weight: 650; margin: 0.8em 0 0.3em; }
+.prose-chat table { border-collapse: collapse; margin: 0.6em 0; font-size: 0.85em; display: block; overflow-x: auto; }
+.prose-chat th, .prose-chat td { border: 1px solid var(--border); padding: 0.3em 0.55em; text-align: left; }
+.prose-chat th { background: var(--surface-2); }
+.prose-chat code { background: var(--surface-2); padding: 0.1em 0.3em; border-radius: 0.3em; }

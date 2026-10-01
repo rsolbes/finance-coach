@@ -1,0 +1,117 @@
+import { describe, expect, it } from "vitest";
+import { fixtureData, TODAY } from "../test/fixture";
+import { evaluate } from "./calc";
+import { addMonths } from "./dates";
+import {
+  cashTimeline,
+  monthlyProjection,
+  planSchedule,
+  revolvingBalance,
+  revolvingDueDate,
+  snapshot,
+} from "./engine";
+
+const data = fixtureData();
+const account = (name: string) => data.accounts.find((a) => a.name === name)!;
+
+describe("dates", () => {
+  it("clamps month ends", () => {
+    expect(addMonths("2026-01-31", 1)).toBe("2026-02-28");
+    expect(addMonths("2026-12-15", 1)).toBe("2027-01-15");
+    expect(addMonths("2026-03-15", -3)).toBe("2025-12-15");
+  });
+});
+
+describe("plans", () => {
+  const loan = data.plans.find((p) => p.name === "Loan 1")!;
+
+  it("lists the remaining payments from the next due date", () => {
+    const s = planSchedule(loan, TODAY);
+    expect(s).toHaveLength(6);
+    expect(s[0]).toEqual({ date: "2026-11-01", number: 4 });
+    expect(s.at(-1)).toEqual({ date: "2027-04-01", number: 9 });
+  });
+
+  it("treats past due dates as paid as time moves on", () => {
+    expect(planSchedule(loan, "2026-11-02")).toHaveLength(5);
+  });
+});
+
+describe("credit cards", () => {
+  const cardA = account("Card A");
+  const cardB = account("Card B");
+
+  it("finds the next payment date from fecha de corte", () => {
+    // Cut Sept 7 was due Sept 27 (passed) -> next cut Oct 7, due Oct 27
+    expect(revolvingDueDate(cardA, TODAY)).toBe("2026-10-27");
+    // Cut Sept 15, due Oct 5 (still ahead) when no due date is known
+    expect(revolvingDueDate({ ...cardB, next_due_date: null }, TODAY)).toBe("2026-10-05");
+  });
+
+  it("uses a known due date until it passes", () => {
+    expect(revolvingDueDate(cardB, TODAY)).toBe("2026-11-04");
+    expect(revolvingDueDate(cardB, "2026-11-05")).toBe("2026-12-05");
+    // Works without a fecha de corte too
+    const cardC = account("Card C");
+    expect(revolvingDueDate(cardC, TODAY)).toBeNull();
+    expect(revolvingDueDate({ ...cardC, next_due_date: "2026-10-20" }, TODAY)).toBe("2026-10-20");
+  });
+
+  it("separates installments from the balance you must pay in full", () => {
+    expect(revolvingBalance(data, cardA, TODAY)).toBe(4900); // 10,000 - (3,000 + 900 + 1,200)
+    expect(revolvingBalance(data, cardB, TODAY)).toBe(3100); // 8,000 - 7 x 700
+  });
+
+  it("splits MSI by the original amount, not the rounded payment", () => {
+    const odd = { ...data, plans: [{ ...data.plans[1], original_amount: 4645.23, payment_amount: 309.68 }] };
+    expect(revolvingBalance(odd, { ...cardA, balance: 5000 }, TODAY)).toBe(354.77);
+  });
+});
+
+describe("cash flow", () => {
+  it("runs a balance through paydays and payments", () => {
+    const t = cashTimeline(data, TODAY, 30);
+    expect(t.starting_cash).toBe(500); // payroll + wallet; vouchers excluded
+    const paydays = t.rows.filter((r) => r.kind === "income" && !r.restricted);
+    expect(paydays.map((r) => r.date)).toEqual(["2026-10-02", "2026-10-09", "2026-10-16", "2026-10-23", "2026-10-30"]);
+    // Gym (500) today takes the balance to exactly 0 before the first payday
+    expect(t.lowest_balance).toBe(0);
+    expect(t.lowest_balance_date).toBe(TODAY);
+    expect(t.first_shortfall_date).toBeNull();
+  });
+
+  it("flags the first day money runs out", () => {
+    const poorer = {
+      ...data,
+      accounts: data.accounts.map((a) => (a.name === "Payroll debit" ? { ...a, balance: 100 } : a)),
+    };
+    expect(cashTimeline(poorer, TODAY, 30).first_shortfall_date).toBe(TODAY);
+  });
+
+  it("projects months and frees money as plans end", () => {
+    const months = monthlyProjection(data, TODAY, 8);
+    expect(months[0].month).toBe("2026-10");
+    expect(months[0].income).toBe(15000); // 5 Fridays
+    expect(months[0].card_statements).toBe(4900); // Card A; Card B is due in November
+    expect(months[1].card_statements).toBe(3100);
+    expect(months[3].plans_ending).toContain("Loan 2"); // Jan 2027
+    expect(months[6].plans_ending).toContain("Loan 1"); // Apr 2027
+    expect(months[7].plans_ending).toContain("Card B installments"); // May 2027
+  });
+
+  it("summarizes commitments", () => {
+    const s = snapshot(data, TODAY);
+    expect(s.monthly_income).toBe(13000); // 3,000 x 52 / 12
+    expect(s.monthly_restricted_income).toBe(1083.33);
+    expect(s.needs_confirmation).toEqual([{ item: "Gym", note: "CONFIRM: day of the month." }]);
+  });
+});
+
+describe("calculate", () => {
+  it("evaluates arithmetic safely", () => {
+    expect(evaluate("3,000 * 52 / 12")).toBe(13000);
+    expect(evaluate("-(2+3)*2^2")).toBe(-20);
+    expect(() => evaluate("process.exit()")).toThrow();
+    expect(() => evaluate("1/0")).toThrow();
+  });
+});
