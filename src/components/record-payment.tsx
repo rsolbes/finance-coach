@@ -21,7 +21,7 @@ interface Draft {
 
 export function RecordPayment(props: {
   targets: PaymentTarget[];
-  fromAccounts: { id: number; name: string }[];
+  fromAccounts: { id: number; name: string; type: string }[];
   today: string;
 }) {
   const blank: Draft = {
@@ -179,6 +179,7 @@ export function RecordPayment(props: {
             {props.fromAccounts.map((a) => (
               <option key={a.id} value={a.id}>
                 {a.name}
+                {a.type === "credit" ? " (credit card)" : ""}
               </option>
             ))}
           </select>
@@ -207,7 +208,9 @@ export function RecordPayment(props: {
         )}
         {draft.fromAccount && (
           <Check checked={draft.deductFromAccount} onChange={(v) => set({ deductFromAccount: v })}>
-            Subtract it from the balance of{" "}
+            {props.fromAccounts.find((a) => String(a.id) === draft.fromAccount)?.type === "credit"
+              ? "Add it to what I owe on "
+              : "Subtract it from the balance of "}
             {props.fromAccounts.find((a) => String(a.id) === draft.fromAccount)?.name ?? "that account"}
           </Check>
         )}

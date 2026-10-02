@@ -146,6 +146,17 @@ describe("coach tools", () => {
     expect((await run("set_profile", { profile: "Lives with family. Paid weekly." })).saved).toBe(true);
   });
 
+  it("records money in once and adds it to the balance", async () => {
+    const { runTool } = await import("./tools");
+    const run = async (name: string, input: unknown) => JSON.parse((await runTool(name, input)).content);
+    const before = (await run("list_records", { kind: "accounts" })).find((a: { id: number }) => a.id === 1).balance;
+    const pay = { date: "2026-10-02", amount: 3000, account_id: 1, category: "income", description: "Salary" };
+    expect((await run("record_money_in", pay)).ok).toBe(true);
+    const after = (await run("list_records", { kind: "accounts" })).find((a: { id: number }) => a.id === 1).balance;
+    expect(after).toBe(before + 3000);
+    expect((await run("record_money_in", pay)).error).toMatch(/already recorded/);
+  });
+
   it("rejects bad input instead of running", async () => {
     const { runTool } = await import("./tools");
     expect((await runTool("get_cash_flow", { days: "lots" })).isError).toBe(true);

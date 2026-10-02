@@ -89,13 +89,22 @@ export function paymentEffects(
 ): PaymentEffects | { error: string } {
   const fx: PaymentEffects = { balances: [], due_dates: [], plans: [], category: "other", target_label: null, notes: [] };
 
+  if (input.from_account_id && input.target === `card:${input.from_account_id}`)
+    return { error: "A card can't pay itself. Pick the account the money came from." };
+
   if (input.from_account_id && input.deduct_from_account) {
     const from = data.accounts.find((a) => a.id === input.from_account_id);
     if (!from) return { error: "Unknown account it was paid from" };
-    if (from.type === "credit") return { error: "Pick the debit account or wallet the money came from" };
-    const balance = round2(from.balance - input.amount);
-    fx.balances.push({ account_id: from.id, balance });
-    fx.notes.push(`${from.name} balance is now ${balance.toFixed(2)}.`);
+    if (from.type === "credit") {
+      // Paid with a credit card: no cash leaves today; it's added to what that card owes.
+      const balance = round2(from.balance + input.amount);
+      fx.balances.push({ account_id: from.id, balance });
+      fx.notes.push(`Charged to ${from.name}, which now owes ${balance.toFixed(2)}.`);
+    } else {
+      const balance = round2(from.balance - input.amount);
+      fx.balances.push({ account_id: from.id, balance });
+      fx.notes.push(`${from.name} balance is now ${balance.toFixed(2)}.`);
+    }
   }
 
   const [kind, rawId] = (input.target ?? "").split(":");

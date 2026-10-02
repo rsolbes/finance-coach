@@ -18,6 +18,8 @@ import {
   setSetting,
   updateTransactionCategory,
 } from "@/lib/repo";
+import { ImportPayload, MoneyInPayload, PaymentPayload } from "@/lib/payloads";
+import { recordMoneyIn } from "@/lib/record-money-in";
 import { recordPayment } from "@/lib/record-payment";
 import { requireAuth } from "@/lib/session";
 import { CATEGORIES } from "@/lib/types";
@@ -64,20 +66,6 @@ export async function deleteMemoryAction(id: number) {
   refreshAll();
 }
 
-const ImportRow = z.object({
-  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-  description: z.string().min(1).max(300),
-  amount: z.number().finite(),
-  category: z.enum(CATEGORIES),
-  note: z.string().max(500),
-});
-
-const ImportPayload = z.object({
-  accountId: z.number().int().positive().nullable(),
-  rows: z.array(ImportRow).max(2000),
-  newBalance: z.number().finite().nullable(),
-});
-
 export async function saveImportAction(payload: unknown): Promise<FormState> {
   await requireAuth();
   const parsed = ImportPayload.safeParse(payload);
@@ -104,23 +92,21 @@ export async function saveImportAction(payload: unknown): Promise<FormState> {
   };
 }
 
-const PaymentPayload = z.object({
-  date: z.string().regex(/^d{4}-d{2}-d{2}$/),
-  amount: z.number().positive().finite(),
-  description: z.string().max(300),
-  target: z.string().regex(/^(card|plan):\d+$/).nullable(),
-  from_account_id: z.number().int().positive().nullable(),
-  deduct_from_account: z.boolean(),
-  reduce_card_balance: z.boolean(),
-  covers_statement: z.boolean(),
-  force: z.boolean().optional(),
-});
-
 export async function recordPaymentAction(payload: unknown): Promise<FormState & { notes?: string[] }> {
   await requireAuth();
   const parsed = PaymentPayload.safeParse(payload);
   if (!parsed.success) return { error: "Fill in a valid date and amount" };
   const res = await recordPayment(parsed.data);
+  if (!res.ok) return { error: res.error };
+  refreshAll();
+  return { ok: true, message: res.message, notes: res.notes };
+}
+
+export async function recordMoneyInAction(payload: unknown): Promise<FormState & { notes?: string[] }> {
+  await requireAuth();
+  const parsed = MoneyInPayload.safeParse(payload);
+  if (!parsed.success) return { error: "Fill in a valid date, amount and account" };
+  const res = await recordMoneyIn(parsed.data);
   if (!res.ok) return { error: res.error };
   refreshAll();
   return { ok: true, message: res.message, notes: res.notes };

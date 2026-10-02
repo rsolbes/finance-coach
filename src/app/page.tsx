@@ -38,6 +38,9 @@ export default async function Dashboard() {
             <Link href="/spending#payments" className="btn btn-ghost">
               I made a payment
             </Link>
+            <Link href="/spending#money-in" className="btn btn-ghost">
+              Money in
+            </Link>
           </div>
         </div>
       </section>

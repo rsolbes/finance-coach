@@ -13,7 +13,7 @@ export function TransactionRow({ t, account }: { t: Transaction; account?: strin
       <span className="w-24 shrink-0 text-muted">{formatShortDate(t.date)}</span>
       <span className="min-w-0 flex-1">
         <span className="block truncate">{t.description}</span>
-        <span className="text-xs text-muted">
+        <span className="block truncate text-xs text-muted" title={t.notes || undefined}>
           {account ?? "No account"}
           {t.notes && ` · ${t.notes}`}
         </span>

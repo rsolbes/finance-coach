@@ -3,6 +3,7 @@ import { connection } from "next/server";
 import { Card } from "@/components/card";
 import { ImportStatement } from "@/components/import-statement";
 import { QuickAdd } from "@/components/quick-add";
+import { MoneyIn } from "@/components/money-in";
 import { RecordPayment } from "@/components/record-payment";
 import { TransactionRow } from "@/components/transaction-row";
 import { addMonths, endOfMonth, formatMonthLabel, isISODate, todayISO } from "@/lib/dates";
@@ -26,9 +27,14 @@ export default async function SpendingPage({ searchParams }: PageProps<"/spendin
   const prev = addMonths(from, -1).slice(0, 7);
   const next = addMonths(from, 1).slice(0, 7);
   const top = summary.by_category[0]?.amount ?? 1;
-  const fromAccounts = accounts.filter((a) => a.type === "debit" || a.type === "wallet");
+  // Payments can come from any account, including a credit card (then they're added to what it owes).
   // Put the payroll account (where the money usually is) first.
-  fromAccounts.sort((a, b) => Number(b.name.includes("Nómina")) - Number(a.name.includes("Nómina")));
+  const fromAccounts = accounts
+    .filter((a) => a.type !== "voucher")
+    .sort((a, b) => Number(b.name.includes("Nómina")) - Number(a.name.includes("Nómina")));
+  const incomes = data.incomes
+    .filter((i) => i.active)
+    .map((i) => ({ id: i.id, name: i.name, amount: i.amount, account_id: i.account_id }));
 
   return (
     <div className="flex flex-col gap-5">
@@ -47,7 +53,10 @@ export default async function SpendingPage({ searchParams }: PageProps<"/spendin
 
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
         <RecordPayment targets={paymentTargets(data, today)} fromAccounts={fromAccounts} today={today} />
-        <ImportStatement accounts={accounts} />
+        <MoneyIn accounts={accounts} incomes={incomes} today={today} />
+        <div className="lg:col-span-2">
+          <ImportStatement accounts={accounts} />
+        </div>
       </div>
 
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-[1fr_1.4fr]">

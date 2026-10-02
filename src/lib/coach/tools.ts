@@ -17,6 +17,8 @@ import {
 } from "../repo";
 import { deleteRecord, describeRecordFields, listRecords, RECORD_KINDS, saveRecord } from "./records";
 import { paymentTargets } from "../payments";
+import { MONEY_IN_CATEGORIES } from "../money-in";
+import { recordMoneyIn } from "../record-money-in";
 import { recordPayment } from "../record-payment";
 import { spendingSummary } from "../spending";
 import { CATEGORIES } from "../types";
@@ -267,8 +269,15 @@ const TOOLS = [
       date: isoDate,
       amount: z.number().positive(),
       target: z.string().regex(/^(card|plan):\d+$/).nullable().describe("e.g. 'card:3' or 'plan:5'; null if neither"),
-      from_account_id: z.number().int().positive().nullable().describe("Debit account or wallet the money came from"),
-      deduct_from_account: z.boolean().describe("Subtract from that account's balance (false if already updated)"),
+      from_account_id: z
+        .number()
+        .int()
+        .positive()
+        .nullable()
+        .describe("Account the payment came from. A credit card is allowed: the amount is then added to what it owes."),
+      deduct_from_account: z
+        .boolean()
+        .describe("Apply it to that account's balance: subtract from a debit account, add to a card (false if already updated)"),
       reduce_card_balance: z.boolean().optional().describe("Card payments: subtract from the card balance (default true)"),
       covers_statement: z.boolean().optional().describe("Card payments: pays the pending statement (default true)"),
       description: z.string().max(300).optional(),
@@ -280,6 +289,22 @@ const TOOLS = [
         covers_statement: p.covers_statement ?? true,
         description: p.description ?? "",
       }),
+  }),
+  tool({
+    name: "record_money_in",
+    description:
+      "Record money the user received (their paycheck, a transfer from another bank, a refund) and add it to the " +
+      "account's balance. Balances don't update by themselves: when the user says they got paid or received money, " +
+      "use this. Category: income for pay, transfer for money moved from their own accounts, other for the rest.",
+    input: z.object({
+      date: isoDate,
+      amount: z.number().positive(),
+      account_id: z.number().int().positive().describe("Account it went into (a credit card lowers what it owes)"),
+      description: z.string().max(300).optional(),
+      category: z.enum(MONEY_IN_CATEGORIES),
+      add_to_balance: z.boolean().optional().describe("Default true; false if the user already updated the balance"),
+    }),
+    run: async (p) => recordMoneyIn({ ...p, description: p.description ?? "", add_to_balance: p.add_to_balance ?? true }),
   }),
   tool({
     name: "remember",
@@ -317,6 +342,7 @@ export const TOOL_LABELS: Record<string, string> = {
   set_profile: "Updating your profile",
   list_payment_targets: "Looking at what's due",
   record_payment: "Recording your payment",
+  record_money_in: "Recording money in",
   remember: "Remembering this",
   forget: "Forgetting an outdated note",
 };
