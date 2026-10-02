@@ -27,7 +27,7 @@ export const PaymentPayload = z.object({
   description: z.string().max(300),
   target: z
     .string()
-    .regex(/^(card|plan):\d+$/)
+    .regex(/^(card|plan|bill):\d+$/)
     .nullable(),
   from_account_id: z.number().int().positive().nullable(),
   deduct_from_account: z.boolean(),
@@ -43,5 +43,6 @@ export const MoneyInPayload = z.object({
   description: z.string().max(300),
   category: z.enum(MONEY_IN_CATEGORIES),
   add_to_balance: z.boolean(),
+  income_id: z.number().int().positive().nullable().optional(),
   force: z.boolean().optional(),
 });

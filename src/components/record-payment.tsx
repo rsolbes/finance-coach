@@ -206,6 +206,9 @@ export function RecordPayment(props: {
         {target?.kind === "plan" && (
           <p className="text-muted">The next payment of this plan will be marked as paid.</p>
         )}
+        {target?.kind === "bill" && (
+          <p className="text-muted">This bill will be marked as paid for its due date, so it stops showing as pending.</p>
+        )}
         {draft.fromAccount && (
           <Check checked={draft.deductFromAccount} onChange={(v) => set({ deductFromAccount: v })}>
             {props.fromAccounts.find((a) => String(a.id) === draft.fromAccount)?.type === "credit"

@@ -137,30 +137,39 @@ export function revolvingBalance(data: FinanceData, account: Account, today: str
 
 // ---------- events ----------
 
-function incomeEvents(data: FinanceData, inc: IncomeSource, from: string, to: string): MoneyEvent[] {
-  const out: MoneyEvent[] = [];
-  const push = (date: string) =>
-    out.push({
-      date,
-      kind: "income",
-      label: inc.name,
-      amount: inc.amount,
-      account: accountName(data, inc.account_id),
-      restricted: Boolean(inc.restricted_to),
-      ref: `income:${inc.id}`,
-    });
+/** Scheduled pay dates of an income source between two dates (inclusive). */
+export function incomeDates(inc: IncomeSource, from: string, to: string): string[] {
+  const out: string[] = [];
   if (inc.frequency === "monthly") {
     const day = Number(inc.anchor_date.slice(8, 10));
     for (let m = startOfMonth(from); m <= to; m = addMonths(m, 1)) {
       const date = withDayOfMonth(m, day);
-      if (date >= from && date <= to) push(date);
+      if (date >= from && date <= to) out.push(date);
     }
     return out;
   }
   const step = inc.frequency === "weekly" ? 7 : 14;
   let date = addDays(inc.anchor_date, Math.ceil(diffDays(inc.anchor_date, from) / step) * step);
-  for (; date <= to; date = addDays(date, step)) push(date);
+  for (; date <= to; date = addDays(date, step)) out.push(date);
   return out;
+}
+
+/** True when this occurrence was already recorded as received or paid. */
+const isSettled = (data: FinanceData, ref: string, occurrence: string) => data.settled?.has(`${ref}@${occurrence}`) ?? false;
+
+function incomeEvents(data: FinanceData, inc: IncomeSource, from: string, to: string): MoneyEvent[] {
+  const ref = `income:${inc.id}`;
+  return incomeDates(inc, from, to)
+    .filter((date) => !isSettled(data, ref, date))
+    .map((date) => ({
+      date,
+      kind: "income" as const,
+      label: inc.name,
+      amount: inc.amount,
+      account: accountName(data, inc.account_id),
+      restricted: Boolean(inc.restricted_to),
+      ref,
+    }));
 }
 
 /**
@@ -174,6 +183,7 @@ function billEvents(data: FinanceData, bill: RecurringBill, from: string, to: st
   const start = card ? addMonths(startOfMonth(from), -2) : startOfMonth(from);
   for (let m = start; m <= to; m = addMonths(m, 1)) {
     const charge = withDayOfMonth(m, bill.day_of_month);
+    if (isSettled(data, `bill:${bill.id}`, charge)) continue;
     let date = charge;
     if (card) {
       if (charge < today) continue;
@@ -200,7 +210,7 @@ export function eventsBetween(data: FinanceData, from: string, to: string, today
   for (const bill of data.bills.filter((b) => b.active)) events.push(...billEvents(data, bill, from, to, today));
   for (const plan of data.plans.filter((p) => p.active)) {
     for (const p of planSchedule(plan, today)) {
-      if (p.date < from || p.date > to) continue;
+      if (p.date < from || p.date > to || isSettled(data, `plan:${plan.id}`, p.date)) continue;
       events.push({
         date: p.date,
         kind: "installment",

@@ -42,9 +42,9 @@ export async function recordPayment(
         args: [p.payments_made, p.next_payment_date, p.plan_id],
       })),
       {
-        sql: `INSERT INTO transactions (account_id, date, description, amount, category, notes, source)
-              VALUES (?, ?, ?, ?, ?, ?, 'payment')`,
-        args: [input.from_account_id, input.date, description.slice(0, 300), -input.amount, fx.category, fx.notes.join(" ")],
+        sql: `INSERT INTO transactions (account_id, date, description, amount, category, notes, source, ref)
+              VALUES (?, ?, ?, ?, ?, ?, 'payment', ?)`,
+        args: [input.from_account_id, input.date, description.slice(0, 300), -input.amount, fx.category, fx.notes.join(" "), fx.ref],
       },
     ],
     "write",

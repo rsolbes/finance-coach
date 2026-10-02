@@ -66,6 +66,7 @@ CREATE TABLE IF NOT EXISTS transactions (
   category TEXT NOT NULL DEFAULT 'other',
   notes TEXT NOT NULL DEFAULT '',
   source TEXT NOT NULL DEFAULT 'manual',
+  ref TEXT,
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS transactions_date ON transactions(date);
@@ -141,6 +142,9 @@ async function migrate(client: Client) {
   const { rows } = await client.execute("PRAGMA table_info(accounts)");
   if (!rows.some((r) => r.name === "next_due_date"))
     await client.execute("ALTER TABLE accounts ADD COLUMN next_due_date TEXT");
+  const tx = await client.execute("PRAGMA table_info(transactions)");
+  // Links a transaction to the scheduled occurrence it settles ("income:3@2026-10-02").
+  if (!tx.rows.some((r) => r.name === "ref")) await client.execute("ALTER TABLE transactions ADD COLUMN ref TEXT");
 }
 
 /** Fills an empty database from data/seed.json (git-ignored) if it exists. */

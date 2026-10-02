@@ -32,9 +32,9 @@ export async function recordMoneyIn(input: MoneyInInput & { force?: boolean }): 
         ? [{ sql: "UPDATE accounts SET balance = ? WHERE id = ?", args: [fx.balance.balance, fx.balance.account_id] }]
         : []),
       {
-        sql: `INSERT INTO transactions (account_id, date, description, amount, category, notes, source)
-              VALUES (?, ?, ?, ?, ?, ?, 'money_in')`,
-        args: [input.account_id, input.date, description.slice(0, 300), input.amount, input.category, fx.notes.join(" ")],
+        sql: `INSERT INTO transactions (account_id, date, description, amount, category, notes, source, ref)
+              VALUES (?, ?, ?, ?, ?, ?, 'money_in', ?)`,
+        args: [input.account_id, input.date, description.slice(0, 300), input.amount, input.category, fx.notes.join(" "), fx.ref],
       },
     ],
     "write",

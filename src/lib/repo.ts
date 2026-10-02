@@ -1,6 +1,8 @@
 import "server-only";
 import type { Row } from "@libsql/client";
+import { addDays, todayISO } from "./dates";
 import { query, run } from "./db";
+import { settledOccurrences, type RecordedTransaction } from "./settlement";
 import { ENTITIES, type EntityKind, type ParsedValue } from "./entities";
 import type {
   Account,
@@ -98,18 +100,29 @@ const toGoal = (r: Row): Goal => ({
 // ---------- finance data ----------
 
 export async function loadFinanceData(): Promise<FinanceData> {
-  const [accounts, plans, bills, incomes] = await Promise.all([
+  const today = todayISO();
+  const [accounts, plans, bills, incomes, recent] = await Promise.all([
     query("SELECT * FROM accounts ORDER BY active DESC, type, name"),
     query("SELECT * FROM plans ORDER BY active DESC, next_payment_date"),
     query("SELECT * FROM bills ORDER BY active DESC, day_of_month"),
     query("SELECT * FROM incomes ORDER BY active DESC, name"),
+    // Recent movements, to know which scheduled paydays and payments are already done.
+    query("SELECT date, amount, account_id, category, ref FROM transactions WHERE date >= ?", [addDays(today, -45)]),
   ]);
-  return {
+  const data: FinanceData = {
     accounts: accounts.map(toAccount),
     plans: plans.map(toPlan),
     bills: bills.map(toBill),
     incomes: incomes.map(toIncome),
   };
+  const txs: RecordedTransaction[] = recent.map((r) => ({
+    date: str(r.date),
+    amount: Number(r.amount),
+    account_id: num(r.account_id),
+    category: str(r.category),
+    ref: r.ref ? str(r.ref) : null,
+  }));
+  return { ...data, settled: settledOccurrences(data, txs, today) };
 }
 
 export async function listEntity(kind: EntityKind): Promise<Record<string, unknown>[]> {

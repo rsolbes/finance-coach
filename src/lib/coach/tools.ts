@@ -254,21 +254,25 @@ const TOOLS = [
   tool({
     name: "list_payment_targets",
     description:
-      "Cards and loans the user can pay, with keys for record_payment, the next due date and roughly how much is due.",
+      "Cards, loans and recurring bills the user can pay, with keys for record_payment, the next due date and roughly how much is due.",
     input: z.object({}),
     run: async () => paymentTargets(await loadFinanceData(), todayISO()),
   }),
   tool({
     name: "record_payment",
     description:
-      "Record a payment the user says they made (to a card or a loan): logs it and updates balances, installment " +
+      "Record a payment the user says they made (to a card, a loan or a recurring bill): logs it and updates balances, installment " +
       "progress and the card's next due date. Get the target key from list_payment_targets. Confirm the amount, " +
       "date and target with the user before calling if anything is unclear. For a card payment, covers_statement " +
       "means it pays the pending statement (in full or at least the pago para no generar intereses).",
     input: z.object({
       date: isoDate,
       amount: z.number().positive(),
-      target: z.string().regex(/^(card|plan):\d+$/).nullable().describe("e.g. 'card:3' or 'plan:5'; null if neither"),
+      target: z
+        .string()
+        .regex(/^(card|plan|bill):\d+$/)
+        .nullable()
+        .describe("e.g. 'card:3', 'plan:5' or 'bill:2' (a recurring bill); null if none of them"),
       from_account_id: z
         .number()
         .int()
@@ -303,6 +307,12 @@ const TOOLS = [
       description: z.string().max(300).optional(),
       category: z.enum(MONEY_IN_CATEGORIES),
       add_to_balance: z.boolean().optional().describe("Default true; false if the user already updated the balance"),
+      income_id: z
+        .number()
+        .int()
+        .positive()
+        .optional()
+        .describe("The income source (from get_financial_overview) when this is a scheduled paycheck, so that payday stops showing as pending"),
     }),
     run: async (p) => recordMoneyIn({ ...p, description: p.description ?? "", add_to_balance: p.add_to_balance ?? true }),
   }),

@@ -2,12 +2,13 @@
 // Pure functions so the rules are testable; repo/record-payment.ts applies the result.
 import { addDays, addMonths } from "./dates";
 import { planSchedule, revolvingBalance, revolvingDueDate, round2 } from "./engine";
-import type { Category, FinanceData, InstallmentPlan } from "./types";
+import { billOccurrenceFor, occurrenceKey } from "./settlement";
+import type { Category, FinanceData, InstallmentPlan, RecurringBill } from "./types";
 
 export interface PaymentTarget {
-  /** "card:<account id>" or "plan:<plan id>" */
+  /** "card:<account id>", "plan:<plan id>" or "bill:<bill id>" */
   key: string;
-  kind: "card" | "plan";
+  kind: "card" | "plan" | "bill";
   id: number;
   label: string;
   due_date: string | null;
@@ -32,6 +33,12 @@ export function paymentTargets(data: FinanceData, today: string): PaymentTarget[
       due_amount: round2(revolvingBalance(data, acc, today) + installments.reduce((a, b) => a + b, 0)),
     });
   }
+  // Recurring bills paid directly (not charged to a card, which its statement covers).
+  for (const bill of data.bills.filter((b) => b.active && !isCardBill(data, b))) {
+    let due = billOccurrenceFor(bill, addDays(today, 7));
+    if (data.settled?.has(occurrenceKey(`bill:${bill.id}`, due))) due = billOccurrenceFor(bill, addDays(due, 8));
+    out.push({ key: `bill:${bill.id}`, kind: "bill", id: bill.id, label: bill.name, due_date: due, due_amount: bill.amount });
+  }
   for (const plan of data.plans.filter((p) => p.active && !isCardPlan(data, p))) {
     const next = planSchedule(plan, today)[0];
     if (!next) continue;
@@ -49,6 +56,10 @@ export function paymentTargets(data: FinanceData, today: string): PaymentTarget[
 
 function isCardPlan(data: FinanceData, plan: InstallmentPlan): boolean {
   return data.accounts.some((a) => a.id === plan.account_id && a.type === "credit");
+}
+
+function isCardBill(data: FinanceData, bill: RecurringBill): boolean {
+  return data.accounts.some((a) => a.id === bill.account_id && a.type === "credit");
 }
 
 export interface PaymentInput {
@@ -70,6 +81,8 @@ export interface PaymentEffects {
   plans: { plan_id: number; payments_made: number; next_payment_date: string }[];
   category: Category;
   target_label: string | null;
+  /** The scheduled occurrence this payment settles, so projections stop counting it. */
+  ref: string | null;
   notes: string[];
 }
 
@@ -87,7 +100,15 @@ export function paymentEffects(
   input: PaymentInput,
   today: string,
 ): PaymentEffects | { error: string } {
-  const fx: PaymentEffects = { balances: [], due_dates: [], plans: [], category: "other", target_label: null, notes: [] };
+  const fx: PaymentEffects = {
+    balances: [],
+    due_dates: [],
+    plans: [],
+    category: "other",
+    target_label: null,
+    ref: null,
+    notes: [],
+  };
 
   if (input.from_account_id && input.target === `card:${input.from_account_id}`)
     return { error: "A card can't pay itself. Pick the account the money came from." };
@@ -162,6 +183,15 @@ export function paymentEffects(
         fx.notes.push(`${plan.name}: payment ${next.number}/${plan.total_payments} (due ${next.date}) marked as paid.`);
       }
     }
+  } else if (kind === "bill") {
+    const bill = data.bills.find((b) => b.id === id && b.active);
+    if (!bill) return { error: "Unknown recurring bill" };
+    if (isCardBill(data, bill)) return { error: "This bill is charged to a card. Record the payment to the card." };
+    const occurrence = billOccurrenceFor(bill, input.date);
+    fx.category = bill.category;
+    fx.target_label = bill.name;
+    fx.ref = occurrenceKey(`bill:${bill.id}`, occurrence);
+    fx.notes.push(`${bill.name} due ${occurrence} marked as paid.`);
   } else if (input.target) {
     return { error: "Unknown payment target" };
   }

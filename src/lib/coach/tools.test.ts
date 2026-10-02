@@ -157,6 +157,20 @@ describe("coach tools", () => {
     expect((await run("record_money_in", pay)).error).toMatch(/already recorded/);
   });
 
+  it("doesn't count a recorded paycheck again in the cash flow", async () => {
+    const { runTool } = await import("./tools");
+    const run = async (name: string, input: unknown) => JSON.parse((await runTool(name, input)).content);
+    const salaryRows = async () =>
+      (await run("get_cash_flow", { days: 14 })).rows
+        .filter((r: { label: string }) => r.label === "Salary")
+        .map((r: { date: string }) => r.date);
+    expect(await salaryRows()).toEqual(["2026-10-02", "2026-10-09"]);
+    // Friday's paycheck lands a day early and is recorded with its income source.
+    const res = await run("record_money_in", { date: "2026-10-01", amount: 3000, account_id: 1, category: "income", income_id: 1 });
+    expect(res.notes.join(" ")).toContain("due 2026-10-02");
+    expect(await salaryRows()).toEqual(["2026-10-09"]);
+  });
+
   it("rejects bad input instead of running", async () => {
     const { runTool } = await import("./tools");
     expect((await runTool("get_cash_flow", { days: "lots" })).isError).toBe(true);

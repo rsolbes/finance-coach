@@ -148,4 +148,6 @@ export interface FinanceData {
   plans: InstallmentPlan[];
   bills: RecurringBill[];
   incomes: IncomeSource[];
+  /** Occurrences already recorded as done ("income:3@2026-10-02"); projections skip them. */
+  settled?: ReadonlySet<string>;
 }

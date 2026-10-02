@@ -58,6 +58,7 @@ export function MoneyIn(props: {
         description,
         category,
         add_to_balance: addToBalance,
+        income_id: preset?.id ?? null,
         force,
       });
       if (res.error) {
