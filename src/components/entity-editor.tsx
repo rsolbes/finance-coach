@@ -64,8 +64,14 @@ function EntityForm(props: {
   accounts: { id: number; name: string }[];
   onDone: () => void;
 }) {
-  const save = saveEntityAction.bind(null, props.kind, props.id ?? null);
-  const [state, action, pending] = useActionState<FormState, FormData>(save, {});
+  const [state, action, pending] = useActionState<FormState, FormData>(
+    async (prev, formData) => {
+      const res = await saveEntityAction(props.kind, props.id ?? null, prev, formData);
+      if (res.ok && !props.id) props.onDone();
+      return res;
+    },
+    {},
+  );
   const [deleting, startDelete] = useTransition();
   const fields = ENTITIES[props.kind].fields as readonly FieldDef[];
 

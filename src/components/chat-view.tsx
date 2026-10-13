@@ -192,7 +192,18 @@ export function ChatView(props: {
                   b.error ? "border-danger/40 bg-danger-soft" : "border-border bg-surface"
                 }`}
               >
-                <ReactMarkdown remarkPlugins={[remarkGfm]}>{b.text || "…"}</ReactMarkdown>
+                <ReactMarkdown
+                  remarkPlugins={[remarkGfm]}
+                  components={{
+                    a: ({ href, children }) => (
+                      <a href={href} target="_blank" rel="noopener noreferrer" className="underline hover:text-accent">
+                        {children}
+                      </a>
+                    ),
+                  }}
+                >
+                  {b.text || "…"}
+                </ReactMarkdown>
               </div>
             ) : null,
           )}

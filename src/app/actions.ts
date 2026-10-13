@@ -118,7 +118,10 @@ export async function addTransactionAction(_prev: FormState, form: FormData): Pr
     .object({
       date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
       description: z.string().trim().min(1).max(300),
-      amount: z.coerce.number().positive(),
+      amount: z.preprocess(
+        (val) => (typeof val === "string" ? Number(val.replace(/[$,\s]/g, "")) : val),
+        z.number().positive(),
+      ),
       direction: z.enum(["out", "in"]),
       category: z.enum(CATEGORIES),
       account_id: z.string(),

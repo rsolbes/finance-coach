@@ -7,7 +7,14 @@ import { CATEGORIES } from "@/lib/types";
 
 export function QuickAdd({ accounts, today }: { accounts: { id: number; name: string }[]; today: string }) {
   const [open, setOpen] = useState(false);
-  const [state, action, pending] = useActionState<FormState, FormData>(addTransactionAction, {});
+  const [state, action, pending] = useActionState<FormState, FormData>(
+    async (prev, formData) => {
+      const res = await addTransactionAction(prev, formData);
+      if (res.ok) setOpen(false);
+      return res;
+    },
+    {},
+  );
 
   if (!open)
     return (

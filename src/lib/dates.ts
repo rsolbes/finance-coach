@@ -21,7 +21,9 @@ export function formatISO(d: Date): string {
 }
 
 export function isISODate(value: string): boolean {
-  return /^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(parseISO(value).getTime());
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const d = parseISO(value);
+  return !Number.isNaN(d.getTime()) && formatISO(d) === value;
 }
 
 export function daysInMonth(year: number, month0: number): number {

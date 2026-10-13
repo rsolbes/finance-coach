@@ -1,7 +1,7 @@
 import "server-only";
 import type { Row } from "@libsql/client";
 import { addDays, todayISO } from "./dates";
-import { query, run } from "./db";
+import { db, query, run } from "./db";
 import { settledOccurrences, type RecordedTransaction } from "./settlement";
 import { ENTITIES, type EntityKind, type ParsedValue } from "./entities";
 import type {
@@ -187,21 +187,41 @@ export type NewTransaction = Omit<Transaction, "id" | "created_at">;
 
 /** Inserts transactions, skipping exact duplicates (same account, date, amount and description). */
 export async function insertTransactions(list: NewTransaction[]): Promise<{ inserted: number; skipped: number }> {
-  let inserted = 0;
+  if (list.length === 0) return { inserted: 0, skipped: 0 };
+  const dates = list.map((t) => t.date).sort();
+  const minDate = dates[0];
+  const maxDate = dates[dates.length - 1];
+
+  const existing = await query<Row>(
+    `SELECT account_id, date, amount, description FROM transactions WHERE date >= ? AND date <= ?`,
+    [minDate, maxDate],
+  );
+
+  const key = (acc: number | null, d: string, a: number, desc: string) =>
+    `${acc ?? "none"}|${d}|${Number(a).toFixed(2)}|${desc}`;
+  const seen = new Set(existing.map((r) => key(num(r.account_id), str(r.date), Number(r.amount), str(r.description))));
+
+  const toInsert: NewTransaction[] = [];
   for (const t of list) {
-    const dup = await query(
-      `SELECT id FROM transactions WHERE account_id IS ? AND date = ? AND amount = ? AND description = ? LIMIT 1`,
-      [t.account_id, t.date, t.amount, t.description],
-    );
-    if (dup.length) continue;
-    await run(
-      `INSERT INTO transactions (account_id, date, description, amount, category, notes, source)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [t.account_id, t.date, t.description, t.amount, t.category, t.notes, t.source],
-    );
-    inserted++;
+    const k = key(t.account_id, t.date, t.amount, t.description);
+    if (seen.has(k)) continue;
+    seen.add(k);
+    toInsert.push(t);
   }
-  return { inserted, skipped: list.length - inserted };
+
+  if (toInsert.length > 0) {
+    const client = await db();
+    await client.batch(
+      toInsert.map((t) => ({
+        sql: `INSERT INTO transactions (account_id, date, description, amount, category, notes, source)
+              VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        args: [t.account_id, t.date, t.description, t.amount, t.category, t.notes, t.source],
+      })),
+      "write",
+    );
+  }
+
+  return { inserted: toInsert.length, skipped: list.length - toInsert.length };
 }
 
 export async function updateTransactionCategory(id: number, category: Category) {
@@ -293,13 +313,21 @@ export async function getConversation(id: number) {
 
 /** Appends messages in order. History is append-only: stored turns are never edited. */
 export async function appendMessages(conversationId: number, messages: { role: string; content: unknown }[]) {
-  for (const m of messages)
-    await run("INSERT INTO messages (conversation_id, role, content) VALUES (?, ?, ?)", [
-      conversationId,
-      m.role,
-      JSON.stringify(m.content),
-    ]);
-  await run("UPDATE conversations SET updated_at = datetime('now') WHERE id = ?", [conversationId]);
+  if (messages.length === 0) return;
+  const client = await db();
+  await client.batch(
+    [
+      ...messages.map((m) => ({
+        sql: "INSERT INTO messages (conversation_id, role, content) VALUES (?, ?, ?)",
+        args: [conversationId, m.role, JSON.stringify(m.content)],
+      })),
+      {
+        sql: "UPDATE conversations SET updated_at = datetime('now') WHERE id = ?",
+        args: [conversationId],
+      },
+    ],
+    "write",
+  );
 }
 
 export async function deleteConversation(id: number) {

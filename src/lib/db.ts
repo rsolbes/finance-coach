@@ -70,6 +70,7 @@ CREATE TABLE IF NOT EXISTS transactions (
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS transactions_date ON transactions(date);
+CREATE INDEX IF NOT EXISTS transactions_lookup ON transactions(date, account_id, amount);
 CREATE TABLE IF NOT EXISTS goals (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   title TEXT NOT NULL,
@@ -145,6 +146,7 @@ async function migrate(client: Client) {
   const tx = await client.execute("PRAGMA table_info(transactions)");
   // Links a transaction to the scheduled occurrence it settles ("income:3@2026-10-02").
   if (!tx.rows.some((r) => r.name === "ref")) await client.execute("ALTER TABLE transactions ADD COLUMN ref TEXT");
+  await client.execute("CREATE INDEX IF NOT EXISTS transactions_lookup ON transactions(date, account_id, amount)");
 }
 
 /** Fills an empty database from data/seed.json (git-ignored) if it exists. */

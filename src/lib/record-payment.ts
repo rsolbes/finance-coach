@@ -15,10 +15,15 @@ export async function recordPayment(
   const fx = paymentEffects(data, input, today);
   if ("error" in fx) return { ok: false, error: fx.error };
 
+  const description = input.description.trim() || (fx.target_label ? `Payment to ${fx.target_label}` : "Payment");
+
   if (!input.force) {
     const dup = await query(
-      "SELECT description FROM transactions WHERE source = 'payment' AND date = ? AND amount = ? LIMIT 1",
-      [input.date, -input.amount],
+      `SELECT description FROM transactions 
+       WHERE source = 'payment' AND date = ? AND amount = ? 
+         AND (description = ? OR (ref IS NOT NULL AND ref = ?)) 
+       LIMIT 1`,
+      [input.date, -input.amount, description, fx.ref],
     );
     if (dup.length)
       return {
@@ -28,8 +33,6 @@ export async function recordPayment(
         )}"). If this is a different payment, save it again with "record anyway".`,
       };
   }
-
-  const description = input.description.trim() || (fx.target_label ? `Payment to ${fx.target_label}` : "Payment");
   await (await db()).batch(
     [
       ...fx.balances.map((b) => ({ sql: "UPDATE accounts SET balance = ? WHERE id = ?", args: [b.balance, b.account_id] })),

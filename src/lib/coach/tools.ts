@@ -325,6 +325,12 @@ const TOOLS = [
     run: async ({ fact }) => ({ saved: true, id: await addMemory(fact) }),
   }),
   tool({
+    name: "list_memories",
+    description: "List all durable facts remembered about the user with their ids.",
+    input: z.object({}),
+    run: async () => listMemories(),
+  }),
+  tool({
     name: "forget",
     description: "Delete a remembered fact that is wrong or outdated, by id.",
     input: z.object({ id: z.number().int().positive() }),
@@ -354,6 +360,7 @@ export const TOOL_LABELS: Record<string, string> = {
   record_payment: "Recording your payment",
   record_money_in: "Recording money in",
   remember: "Remembering this",
+  list_memories: "Checking memories",
   forget: "Forgetting an outdated note",
 };
 

@@ -73,6 +73,9 @@ describe("coach tools", () => {
     expect(upd.to_pay_in_full_now).toBe(8900); // 14,000 - 5,100 in MSI
 
     const mem = JSON.parse((await runTool("remember", { fact: "Prefers Spanish" })).content);
+    const listed = JSON.parse((await runTool("list_memories", {})).content);
+    expect(listed).toHaveLength(1);
+    expect(listed[0]).toMatchObject({ content: "Prefers Spanish" });
     expect(JSON.parse((await runTool("forget", { id: mem.id })).content).remaining).toEqual([]);
   });
 

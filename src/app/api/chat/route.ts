@@ -136,13 +136,12 @@ async function runCoach(opts: {
       return;
     }
 
-    // Run every tool call and answer them all in a single user turn.
-    const results: Anthropic.Beta.BetaToolResultBlockParam[] = await Promise.all(
-      toolUses.map(async (t) => {
-        const r = await runTool(t.name, t.input);
-        return { type: "tool_result" as const, tool_use_id: t.id, content: r.content, is_error: r.isError };
-      }),
-    );
+    // Run tool calls sequentially so mutating tools never race or cause lost updates.
+    const results: Anthropic.Beta.BetaToolResultBlockParam[] = [];
+    for (const t of toolUses) {
+      const r = await runTool(t.name, t.input);
+      results.push({ type: "tool_result" as const, tool_use_id: t.id, content: r.content, is_error: r.isError });
+    }
     const resultsTurn: Param = { role: "user", content: results };
     // Store the tool call and its results together so history never has a dangling tool_use.
     await appendMessages(convId, [assistantTurn, resultsTurn]);
