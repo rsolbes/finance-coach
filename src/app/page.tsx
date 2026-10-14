@@ -4,14 +4,15 @@ import { Card } from "@/components/card";
 import { addDays, formatMonthLabel, formatShortDate, todayISO } from "@/lib/dates";
 import { cashTimeline, monthlyProjection, snapshot } from "@/lib/engine";
 import { money } from "@/lib/format";
-import { loadFinanceData } from "@/lib/repo";
+import { getSetting, loadFinanceData } from "@/lib/repo";
 
 export default async function Dashboard() {
   await connection();
-  const data = await loadFinanceData();
+  const [data, bufferStr] = await Promise.all([loadFinanceData(), getSetting("cash_buffer")]);
   const today = todayISO();
+  const cashBuffer = bufferStr ? Number(bufferStr) : 2000;
   const snap = snapshot(data, today);
-  const timeline = cashTimeline(data, today, 45);
+  const timeline = cashTimeline(data, today, 45, cashBuffer);
   const months = monthlyProjection(data, today, 12);
   const next3Weeks = timeline.rows.filter((r) => r.date <= addDays(today, 21));
   const maxAbs = Math.max(1, ...months.map((m) => Math.abs(m.left_for_living)));
@@ -32,6 +33,14 @@ export default async function Dashboard() {
             )}
           </div>
           <div className="flex flex-col gap-2 sm:flex-row">
+            <Link
+              href={askCoach(
+                "Es viernes de nómina. Revisa mi saldo actual en débito, qué pagos y tarjetas vencen antes del próximo viernes, y dime exactamente qué liquidar hoy y cuánto me queda libre.",
+              )}
+              className="btn bg-ok hover:opacity-90"
+            >
+              Plan de nómina
+            </Link>
             <Link href="/coach" className="btn">
               Talk to coach
             </Link>
@@ -60,6 +69,26 @@ export default async function Dashboard() {
             className="mt-3 inline-block text-sm font-semibold text-danger underline underline-offset-4"
           >
             Make a plan with the coach →
+          </Link>
+        </section>
+      )}
+
+      {!timeline.first_shortfall_date && timeline.cushion_breach_date && (
+        <section className="rounded-2xl border border-warn/30 bg-warn-soft p-4">
+          <p className="font-semibold text-warn">
+            Saldo por debajo de tu colchón de seguridad ({money(cashBuffer)}) el {formatShortDate(timeline.cushion_breach_date)}
+          </p>
+          <p className="mt-1 text-sm">
+            Tu saldo disponible alcanzará su punto más bajo de <b className="num">{money(timeline.lowest_balance)}</b> el{" "}
+            {formatShortDate(timeline.lowest_balance_date)}.
+          </p>
+          <Link
+            href={askCoach(
+              `Mi saldo proyectado baja a ${money(timeline.lowest_balance)} el ${timeline.lowest_balance_date}, por debajo de mi colchón de ${money(cashBuffer)}. ¿Cómo ajustamos los pagos?`,
+            )}
+            className="mt-3 inline-block text-sm font-semibold text-warn underline underline-offset-4"
+          >
+            Ajustar con el coach →
           </Link>
         </section>
       )}

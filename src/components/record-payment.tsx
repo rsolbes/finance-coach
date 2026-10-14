@@ -104,13 +104,41 @@ export function RecordPayment(props: {
     });
   }
 
+  function handlePaste(e: React.ClipboardEvent) {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    for (let i = 0; i < items.length; i++) {
+      if (items[i].type.startsWith("image/") || items[i].type === "application/pdf") {
+        const pasted = items[i].getAsFile();
+        if (pasted) {
+          setFile(pasted);
+          e.preventDefault();
+          break;
+        }
+      }
+    }
+  }
+
+  function handleDrop(e: React.DragEvent) {
+    e.preventDefault();
+    const dropped = e.dataTransfer.files?.[0];
+    if (dropped) setFile(dropped);
+  }
+
   if (!draft)
     return (
-      <section id="payments" className="min-w-0 rounded-2xl border border-dashed border-border bg-surface p-4">
+      <section
+        id="payments"
+        onPaste={handlePaste}
+        onDragOver={(e) => e.preventDefault()}
+        onDrop={handleDrop}
+        tabIndex={0}
+        className="min-w-0 rounded-2xl border border-dashed border-border bg-surface p-4 focus:border-accent focus:outline-none"
+      >
         <h2 className="font-semibold">Record a payment</h2>
         <p className="text-xs text-muted">
-          Upload the receipt (comprobante) of a card or loan payment as a PDF or screenshot. Balances, installments and
-          due dates update when you save.
+          Upload the receipt (comprobante) of a card or loan payment as a PDF or screenshot. Puedes arrastrar el archivo o
+          pegar una captura con <kbd className="rounded border border-border bg-surface-2 px-1 text-[10px]">Ctrl+V</kbd>.
         </p>
         <div className="mt-3 flex flex-col gap-2">
           <input
@@ -119,6 +147,11 @@ export function RecordPayment(props: {
             onChange={(e) => setFile(e.target.files?.[0] ?? null)}
             className="field"
           />
+          {file && (
+            <p className="text-xs text-accent">
+              ✓ Archivo listo: {file.name || "captura-pegada.png"} ({(file.size / 1024).toFixed(0)} KB)
+            </p>
+          )}
         </div>
         <div className="mt-2 flex flex-wrap justify-end gap-2">
           <button className="btn" onClick={read} disabled={!file || reading}>

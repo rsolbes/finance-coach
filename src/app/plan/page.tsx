@@ -11,17 +11,20 @@ import { logoutAction } from "../actions";
 export default async function PlanPage() {
   await connection();
   const today = todayISO();
-  const [data, goals, profile, memories, rawAccounts, rawPlans, rawBills, rawIncomes, rawGoals] = await Promise.all([
-    loadFinanceData(),
-    listGoals(),
-    getSetting("profile"),
-    listMemories(),
-    listEntity("accounts"),
-    listEntity("plans"),
-    listEntity("bills"),
-    listEntity("incomes"),
-    listEntity("goals"),
-  ]);
+  const [data, goals, profile, bufferStr, memories, rawAccounts, rawPlans, rawBills, rawIncomes, rawGoals] =
+    await Promise.all([
+      loadFinanceData(),
+      listGoals(),
+      getSetting("profile"),
+      getSetting("cash_buffer"),
+      listMemories(),
+      listEntity("accounts"),
+      listEntity("plans"),
+      listEntity("bills"),
+      listEntity("incomes"),
+      listEntity("goals"),
+    ]);
+  const cashBuffer = bufferStr ? Number(bufferStr) : 2000;
   const values = (raw: Record<string, unknown>[], id: number) => raw.find((r) => Number(r.id) === id) ?? {};
   const accounts = data.accounts.map((a) => ({ id: a.id, name: a.name }));
   const accountName = (id: number | null) => data.accounts.find((a) => a.id === id)?.name;
@@ -88,11 +91,21 @@ export default async function PlanPage() {
 
   return (
     <div className="flex flex-col gap-5">
-      <div>
-        <h1 className="text-xl font-semibold">My plan</h1>
-        <p className="text-sm text-muted">
-          Everything the dashboard and coach use. Keep balances up to date (or just tell the coach) for accurate advice.
-        </p>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h1 className="text-xl font-semibold">My plan</h1>
+          <p className="text-sm text-muted">
+            Everything the dashboard and coach use. Keep balances up to date (or just tell the coach) for accurate advice.
+          </p>
+        </div>
+        <a
+          href="/api/backup"
+          download={`finance-backup-${today}.json`}
+          className="btn btn-ghost border border-border text-sm"
+          title="Descargar copia completa de tus datos en JSON"
+        >
+          ⬇ Descargar respaldo JSON
+        </a>
       </div>
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
         <EntityEditor kind="accounts" rows={accountRows} accounts={accounts} />
@@ -100,7 +113,7 @@ export default async function PlanPage() {
         <EntityEditor kind="bills" rows={billRows} accounts={accounts} />
         <EntityEditor kind="incomes" rows={incomeRows} accounts={accounts} />
         <EntityEditor kind="goals" rows={goalRows} accounts={accounts} />
-        <ProfileEditor profile={profile ?? ""} memories={memories} />
+        <ProfileEditor profile={profile ?? ""} cashBuffer={cashBuffer} memories={memories} />
       </div>
       {authEnabled() && (
         <form action={logoutAction}>

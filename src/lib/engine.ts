@@ -34,7 +34,7 @@ export interface MoneyEvent {
 export const round2 = (n: number) => Math.round(n * 100) / 100;
 const sum = (xs: number[]) => round2(xs.reduce((a, b) => a + b, 0));
 
-const PERIODS_PER_MONTH: Record<IncomeFrequency, number> = {
+export const PERIODS_PER_MONTH: Record<IncomeFrequency, number> = {
   weekly: 52 / 12,
   biweekly: 26 / 12,
   monthly: 1,
@@ -266,16 +266,20 @@ export interface Timeline {
   lowest_balance_date: string;
   /** First date the running balance goes below zero, if any. */
   first_shortfall_date: string | null;
+  /** First date the running balance falls below the minimum cushion buffer, if configured. */
+  cushion_breach_date: string | null;
+  cushion_amount: number | null;
 }
 
 /** Running cash balance through upcoming income and payments (vouchers excluded). */
-export function cashTimeline(data: FinanceData, today: string, days: number): Timeline {
+export function cashTimeline(data: FinanceData, today: string, days: number, cushion = 0): Timeline {
   const to = addDays(today, days);
   const starting = availableCash(data);
   let balance = starting;
   let lowest = starting;
   let lowestDate = today;
   let shortfall: string | null = null;
+  let cushionBreach: string | null = null;
   const rows: TimelineRow[] = [];
   for (const e of eventsBetween(data, today, to, today)) {
     if (e.restricted) {
@@ -289,6 +293,7 @@ export function cashTimeline(data: FinanceData, today: string, days: number): Ti
       lowestDate = e.date;
     }
     if (balance < 0 && !shortfall) shortfall = e.date;
+    if (cushion > 0 && balance < cushion && !cushionBreach) cushionBreach = e.date;
   }
   const flows = rows.filter((r) => !r.restricted);
   return {
@@ -302,6 +307,8 @@ export function cashTimeline(data: FinanceData, today: string, days: number): Ti
     lowest_balance: round2(lowest),
     lowest_balance_date: lowestDate,
     first_shortfall_date: shortfall,
+    cushion_breach_date: cushionBreach,
+    cushion_amount: cushion > 0 ? cushion : null,
   };
 }
 

@@ -21,11 +21,34 @@ export function ImportStatement({ accounts }: { accounts: { id: number; name: st
   const [updateBalance, setUpdateBalance] = useState(true);
   const [saving, startSaving] = useTransition();
 
-  function addFiles(list: FileList | null) {
+  function addFiles(list: FileList | File[] | null) {
     const picked = Array.from(list ?? []);
     // Picking again adds to the selection (handy for screenshots chosen in several rounds).
     setFiles((cur) => [...cur, ...picked.filter((p) => !cur.some((c) => c.name === p.name && c.size === p.size))]);
     setDone(null);
+  }
+
+  function handlePaste(e: React.ClipboardEvent) {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    const pasted: File[] = [];
+    for (let i = 0; i < items.length; i++) {
+      if (items[i].type.startsWith("image/") || items[i].type === "application/pdf") {
+        const f = items[i].getAsFile();
+        if (f) pasted.push(f);
+      }
+    }
+    if (pasted.length > 0) {
+      addFiles(pasted);
+      e.preventDefault();
+    }
+  }
+
+  function handleDrop(e: React.DragEvent) {
+    e.preventDefault();
+    if (e.dataTransfer.files?.length) {
+      addFiles(e.dataTransfer.files);
+    }
   }
 
   async function read() {
@@ -153,12 +176,18 @@ export function ImportStatement({ accounts }: { accounts: { id: number; name: st
   }
 
   return (
-    <section className="min-w-0 rounded-2xl border border-dashed border-border bg-surface p-4">
+    <section
+      onPaste={handlePaste}
+      onDragOver={(e) => e.preventDefault()}
+      onDrop={handleDrop}
+      tabIndex={0}
+      className="min-w-0 rounded-2xl border border-dashed border-border bg-surface p-4 focus:border-accent focus:outline-none"
+    >
       <h2 className="font-semibold">Import a bank statement</h2>
       <p className="text-xs text-muted">
-        PDF estados de cuenta, screenshots of your movements, or a CSV export. You can add several files at once
-        (e.g. all the screenshots of one account); repeated movements across screenshots are only counted once. You
-        review everything before it&apos;s saved.
+        PDF estados de cuenta, screenshots of your movements, or a CSV export. Puedes arrastrar varios archivos o
+        pegar capturas con <kbd className="rounded border border-border bg-surface-2 px-1 text-[10px]">Ctrl+V</kbd>.
+        You review everything before it&apos;s saved.
       </p>
       <div className="mt-3 flex flex-col gap-2">
         <select value={accountId} onChange={(e) => setAccountId(e.target.value)} className="field">

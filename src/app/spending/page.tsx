@@ -5,8 +5,9 @@ import { ImportStatement } from "@/components/import-statement";
 import { QuickAdd } from "@/components/quick-add";
 import { MoneyIn } from "@/components/money-in";
 import { RecordPayment } from "@/components/record-payment";
-import { TransactionRow } from "@/components/transaction-row";
+import { TransactionList } from "@/components/transaction-list";
 import { addMonths, endOfMonth, formatMonthLabel, isISODate, todayISO } from "@/lib/dates";
+import { PERIODS_PER_MONTH } from "@/lib/engine";
 import { label, money } from "@/lib/format";
 import { paymentTargets } from "@/lib/payments";
 import { listTransactions, loadFinanceData } from "@/lib/repo";
@@ -23,10 +24,25 @@ export default async function SpendingPage({ searchParams }: PageProps<"/spendin
   const [data, txs] = await Promise.all([loadFinanceData(), listTransactions({ from, to, limit: 5000 })]);
   const summary = spendingSummary(txs, from, to);
   const accounts = data.accounts.filter((a) => a.active).map((a) => ({ id: a.id, name: a.name, type: a.type }));
-  const accountName = new Map(accounts.map((a) => [a.id, a.name]));
   const prev = addMonths(from, -1).slice(0, 7);
   const next = addMonths(from, 1).slice(0, 7);
   const top = summary.by_category[0]?.amount ?? 1;
+
+  // Food vouchers / vales de despensa vs. groceries
+  const voucherIncomes = data.incomes.filter(
+    (i) =>
+      i.active &&
+      (i.restricted_to === "food" ||
+        i.restricted_to === "despensa" ||
+        accounts.find((a) => a.id === i.account_id)?.type === "voucher"),
+  );
+  const monthlyVouchers = Math.round(
+    voucherIncomes.reduce((acc, i) => acc + i.amount * (PERIODS_PER_MONTH[i.frequency] ?? 0), 0),
+  );
+  const groceriesCategory = summary.by_category.find((c) => c.category === "groceries");
+  const groceriesSpent = groceriesCategory?.amount ?? 0;
+  const voucherAccount = data.accounts.find((a) => a.active && a.type === "voucher");
+
   // Payments can come from any account, including a credit card (then they're added to what it owes).
   // Put the payroll account (where the money usually is) first.
   const fromAccounts = accounts
@@ -105,6 +121,29 @@ export default async function SpendingPage({ searchParams }: PageProps<"/spendin
               </ul>
             </>
           )}
+          {(monthlyVouchers > 0 || voucherAccount) && (
+            <div className="mt-4 rounded-xl border border-border bg-surface-2 p-3 text-sm">
+              <div className="flex items-center justify-between font-medium">
+                <span>🛒 Vales de despensa vs. Súper</span>
+                <span className="num font-semibold">{money(groceriesSpent)} gastado</span>
+              </div>
+              <p className="mt-1 text-xs text-muted">
+                Vales mensuales estimados: {money(monthlyVouchers)}
+                {voucherAccount ? ` · Saldo actual en tarjeta: ${money(voucherAccount.balance)}` : ""}
+              </p>
+              <div className="mt-2 text-xs">
+                {groceriesSpent <= monthlyVouchers ? (
+                  <span className="inline-flex items-center gap-1 font-medium text-ok">
+                    ✓ Cubierto por tus vales (te quedan ~{money(monthlyVouchers - groceriesSpent)} de margen)
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1 font-medium text-warn">
+                    ⚠ Excediste tus vales por ~{money(groceriesSpent - monthlyVouchers)} (pagado de tu sueldo/efectivo)
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
           {summary.transactions > 0 && (
             <Link
               href={`/coach?q=${encodeURIComponent(
@@ -118,17 +157,7 @@ export default async function SpendingPage({ searchParams }: PageProps<"/spendin
         </Card>
 
         <Card title="Transactions" action={<QuickAdd accounts={accounts} today={today} />}>
-          {txs.length === 0 ? (
-            <p className="text-sm text-muted">
-              No transactions for this month yet. Upload a statement above or add one by hand.
-            </p>
-          ) : (
-            <ul className="divide-y divide-border">
-              {txs.map((t) => (
-                <TransactionRow key={t.id} t={t} account={t.account_id ? accountName.get(t.account_id) : undefined} />
-              ))}
-            </ul>
-          )}
+          <TransactionList transactions={txs} accounts={accounts} />
         </Card>
       </div>
     </div>

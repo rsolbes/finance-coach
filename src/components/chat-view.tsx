@@ -9,6 +9,9 @@ import { deleteConversationAction } from "@/app/actions";
 import type { ChatEvent } from "@/app/api/chat/route";
 import type { ConversationSummary } from "@/lib/repo";
 
+import { shrinkImage } from "@/lib/shrink-image";
+import type { Receipt } from "@/lib/receipt";
+
 export interface ChatBubble {
   role: "user" | "coach";
   text: string;
@@ -16,10 +19,10 @@ export interface ChatBubble {
 }
 
 const STARTERS = [
-  "How healthy are my finances right now? Be honest.",
-  "Plan my payments for the next 4 paychecks so I avoid interest and late fees.",
-  "What should I fix first?",
-  "Help me start an emergency fund, even a small one.",
+  "¿Cómo está mi salud financiera hoy? Sé honesto.",
+  "¿Cómo debo distribuir mi pago de este viernes para no pagar intereses ni recargos?",
+  "¿Cuál deuda o tarjeta me conviene liquidar o amortizar primero?",
+  "¿Cómo protejo mi colchón de seguridad esta quincena/semana?",
 ];
 
 export function ChatView(props: {
@@ -31,6 +34,7 @@ export function ChatView(props: {
   const router = useRouter();
   const [bubbles, setBubbles] = useState<ChatBubble[]>(props.initialBubbles);
   const [draft, setDraft] = useState(props.initialDraft);
+  const [attachedFile, setAttachedFile] = useState<File | null>(null);
   const [status, setStatus] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [showList, setShowList] = useState(false);
@@ -38,6 +42,7 @@ export function ChatView(props: {
   const [syncedId, setSyncedId] = useState<number | null>(props.conversationId);
   const abort = useRef<AbortController | null>(null);
   const bottom = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Navigating to another conversation resets the view; the id we just created ourselves does not.
   if (props.conversationId !== syncedId) {
@@ -55,11 +60,44 @@ export function ChatView(props: {
 
   useEffect(() => () => abort.current?.abort(), []);
 
-  async function send(text: string) {
-    const message = text.trim();
-    if (!message || busy) return;
+  async function send(text: string, fileToSend?: File | null) {
+    const file = fileToSend !== undefined ? fileToSend : attachedFile;
+    const raw = text.trim();
+    if (!raw && !file) return;
+    if (busy) return;
+
     setDraft("");
+    setAttachedFile(null);
     setBusy(true);
+
+    let message = raw;
+    if (file) {
+      setStatus("Leyendo comprobante");
+      try {
+        const body = new FormData();
+        body.set("file", await shrinkImage(file));
+        const res = await fetch("/api/receipt", { method: "POST", body });
+        if (res.ok) {
+          const r = (await res.json()) as Receipt;
+          const details = [
+            r.date && `Fecha: ${r.date}`,
+            r.amount && `Monto: $${r.amount} MXN`,
+            r.paid_to && `Destinatario: ${r.paid_to}`,
+            r.paid_from && `Cuenta origen: ${r.paid_from}`,
+            r.reference && `Folio: ${r.reference}`,
+            r.suggested_target && `Sugerencia: pagar ${r.suggested_target}`,
+          ]
+            .filter(Boolean)
+            .join(" · ");
+          message = `[Comprobante adjunto: ${details}]\n\n${raw || "Adjunto este comprobante de pago. Por favor revísalo y regístralo si es correcto."}`;
+        } else {
+          message = `[Archivo adjunto: ${file.name}]\n\n${raw || "Adjunto este archivo."}`;
+        }
+      } catch {
+        message = `[Archivo adjunto: ${file.name}]\n\n${raw || "Adjunto este archivo."}`;
+      }
+    }
+
     setStatus("Thinking");
     setBubbles((b) => [...b, { role: "user", text: message }, { role: "coach", text: "" }]);
     const appendToCoach = (fn: (prev: ChatBubble) => ChatBubble) =>
@@ -221,30 +259,82 @@ export function ChatView(props: {
             e.preventDefault();
             send(draft);
           }}
-          className="sticky bottom-20 mt-4 flex gap-2 rounded-2xl border border-border bg-surface p-2 sm:bottom-4"
-        >
-          <textarea
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                send(draft);
+          onPaste={(e) => {
+            const items = e.clipboardData?.items;
+            if (!items) return;
+            for (let i = 0; i < items.length; i++) {
+              if (items[i].type.startsWith("image/") || items[i].type === "application/pdf") {
+                const pasted = items[i].getAsFile();
+                if (pasted) {
+                  setAttachedFile(pasted);
+                  e.preventDefault();
+                  break;
+                }
               }
-            }}
-            rows={1}
-            placeholder="Ask your coach… (Spanish or English)"
-            className="field max-h-40 min-h-11 flex-1 resize-none border-0"
-          />
-          {busy ? (
-            <button type="button" className="btn btn-ghost" onClick={() => abort.current?.abort()}>
-              Stop
-            </button>
-          ) : (
-            <button className="btn" disabled={!draft.trim()}>
-              Send
-            </button>
+            }
+          }}
+          className="sticky bottom-20 mt-4 flex flex-col gap-2 rounded-2xl border border-border bg-surface p-2 sm:bottom-4"
+        >
+          {attachedFile && (
+            <div className="flex items-center justify-between rounded-lg bg-surface-2 px-3 py-1.5 text-xs">
+              <span className="flex items-center gap-1.5 truncate">
+                <span>📎</span>
+                <span className="font-medium text-foreground truncate">{attachedFile.name || "captura.png"}</span>
+                <span className="text-muted">({(attachedFile.size / 1024).toFixed(0)} KB)</span>
+              </span>
+              <button
+                type="button"
+                onClick={() => setAttachedFile(null)}
+                className="px-1 text-muted hover:text-danger"
+                aria-label="Quitar archivo"
+              >
+                ✕
+              </button>
+            </div>
           )}
+          <div className="flex items-end gap-2">
+            <input
+              type="file"
+              ref={fileInputRef}
+              accept="application/pdf,image/png,image/jpeg,image/webp"
+              className="hidden"
+              onChange={(e) => {
+                if (e.target.files?.[0]) setAttachedFile(e.target.files[0]);
+                e.target.value = "";
+              }}
+            />
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              className="btn btn-ghost h-11 px-2.5 text-muted hover:text-foreground"
+              title="Adjuntar comprobante o imagen"
+              aria-label="Adjuntar comprobante o imagen"
+            >
+              📎
+            </button>
+            <textarea
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  send(draft);
+                }
+              }}
+              rows={1}
+              placeholder="Pregúntale a tu coach… (o pega un comprobante con Ctrl+V)"
+              className="field max-h-40 min-h-11 flex-1 resize-none border-0"
+            />
+            {busy ? (
+              <button type="button" className="btn btn-ghost" onClick={() => abort.current?.abort()}>
+                Stop
+              </button>
+            ) : (
+              <button className="btn" disabled={!draft.trim() && !attachedFile}>
+                Send
+              </button>
+            )}
+          </div>
         </form>
       </div>
     </div>

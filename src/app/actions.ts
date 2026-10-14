@@ -56,8 +56,15 @@ export async function deleteEntityAction(kind: string, id: number) {
 export async function saveProfileAction(_prev: FormState, form: FormData): Promise<FormState> {
   await requireAuth();
   await setSetting("profile", String(form.get("profile") ?? "").slice(0, 8000));
+  const bufferVal = form.get("cash_buffer");
+  if (bufferVal != null && String(bufferVal).trim() !== "") {
+    const num = Number(String(bufferVal).replace(/[$,\s]/g, ""));
+    if (!isNaN(num) && num >= 0) {
+      await setSetting("cash_buffer", String(num));
+    }
+  }
   refreshAll();
-  return { ok: true, message: "Saved. New coach conversations will use it." };
+  return { ok: true, message: "Saved. New coach conversations and timeline will use it." };
 }
 
 export async function deleteMemoryAction(id: number) {

@@ -4,7 +4,15 @@ import { useActionState, useTransition } from "react";
 import { deleteMemoryAction, saveProfileAction, type FormState } from "@/app/actions";
 import type { CoachMemory } from "@/lib/types";
 
-export function ProfileEditor({ profile, memories }: { profile: string; memories: CoachMemory[] }) {
+export function ProfileEditor({
+  profile,
+  cashBuffer = 2000,
+  memories,
+}: {
+  profile: string;
+  cashBuffer?: number;
+  memories: CoachMemory[];
+}) {
   const [state, action, pending] = useActionState<FormState, FormData>(saveProfileAction, {});
   const [removing, startRemove] = useTransition();
 
@@ -14,8 +22,26 @@ export function ProfileEditor({ profile, memories }: { profile: string; memories
       <p className="text-xs text-muted">
         Anything that helps: rent, who you live with, transport, goals, worries. Used in new conversations.
       </p>
-      <form action={action} className="mt-3 flex flex-col gap-2">
+      <form action={action} className="mt-3 flex flex-col gap-3">
         <textarea name="profile" defaultValue={profile} rows={6} className="field" />
+        <div className="flex flex-col gap-1">
+          <label htmlFor="cash_buffer" className="text-xs font-medium text-muted">
+            Colchón mínimo de seguridad en cuenta (MXN)
+          </label>
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-medium">$</span>
+            <input
+              id="cash_buffer"
+              name="cash_buffer"
+              type="number"
+              defaultValue={cashBuffer}
+              min="0"
+              step="500"
+              className="field w-36"
+            />
+            <span className="text-xs text-muted">El timeline te alertará si tu saldo proyectado baja de este colchón.</span>
+          </div>
+        </div>
         <div className="flex items-center gap-3">
           <button className="btn" disabled={pending}>
             Save
