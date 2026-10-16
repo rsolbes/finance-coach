@@ -43,6 +43,7 @@ export function ChatView(props: {
   const abort = useRef<AbortController | null>(null);
   const bottom = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   // Navigating to another conversation resets the view; the id we just created ourselves does not.
   if (props.conversationId !== syncedId) {
@@ -57,6 +58,13 @@ export function ChatView(props: {
   useEffect(() => {
     bottom.current?.scrollIntoView({ behavior: "smooth", block: "end" });
   }, [bubbles, status]);
+
+  useEffect(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${Math.min(el.scrollHeight, 180)}px`;
+  }, [draft]);
 
   useEffect(() => () => abort.current?.abort(), []);
 
@@ -313,6 +321,7 @@ export function ChatView(props: {
               📎
             </button>
             <textarea
+              ref={textareaRef}
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
               onKeyDown={(e) => {
@@ -323,14 +332,14 @@ export function ChatView(props: {
               }}
               rows={1}
               placeholder="Pregúntale a tu coach… (o pega un comprobante con Ctrl+V)"
-              className="field max-h-40 min-h-11 flex-1 resize-none border-0"
+              className="field max-h-48 min-h-11 flex-1 resize-none border-0 py-2.5 leading-relaxed overflow-y-auto"
             />
             {busy ? (
-              <button type="button" className="btn btn-ghost" onClick={() => abort.current?.abort()}>
+              <button type="button" className="btn btn-ghost h-11" onClick={() => abort.current?.abort()}>
                 Stop
               </button>
             ) : (
-              <button className="btn" disabled={!draft.trim() && !attachedFile}>
+              <button className="btn h-11" disabled={!draft.trim() && !attachedFile}>
                 Send
               </button>
             )}
