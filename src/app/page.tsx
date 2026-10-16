@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { connection } from "next/server";
 import { Card } from "@/components/card";
-import { addDays, formatMonthLabel, formatShortDate, todayISO } from "@/lib/dates";
+import { addDays, formatMonthLabel, formatShortDate, parseISO, todayISO } from "@/lib/dates";
 import { cashTimeline, monthlyProjection, snapshot } from "@/lib/engine";
 import { money } from "@/lib/format";
 import { getSetting, loadFinanceData } from "@/lib/repo";
@@ -18,12 +18,37 @@ export default async function Dashboard() {
   const maxAbs = Math.max(1, ...months.map((m) => Math.abs(m.left_for_living)));
   const unscheduled = snap.cards.filter((c) => !c.revolving_due && c.revolving > 0);
 
+  const dayOfWeek = parseISO(today).getUTCDay();
+  const daysUntilFriday = (5 - dayOfWeek + 7) % 7;
+  const isPayday = daysUntilFriday === 0;
+  const isPaydayEve = daysUntilFriday === 1;
+
+  const upcomingRelief = snap.relief_timeline.slice(0, 2);
+  const primaryRelief = upcomingRelief[0];
+  const primaryPlan = primaryRelief ? snap.plans.find((p) => p.name === primaryRelief.plan) : null;
+
   const askCoach = (q: string) => `/coach?q=${encodeURIComponent(q)}`;
 
   return (
     <div className="flex flex-col gap-5">
       <section>
-        <p className="text-sm text-muted">{formatShortDate(today)}</p>
+        <div className="flex flex-wrap items-center gap-2">
+          <p className="text-sm text-muted">{formatShortDate(today)}</p>
+          {isPayday ? (
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-ok/30 bg-ok/15 px-2.5 py-0.5 text-xs font-semibold text-ok">
+              <span className="h-2 w-2 animate-pulse rounded-full bg-ok" />
+              ¡Hoy es viernes de nómina!
+            </span>
+          ) : isPaydayEve ? (
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-accent/30 bg-accent-soft px-2.5 py-0.5 text-xs font-medium text-accent">
+              Mañana es día de nómina ⏳
+            </span>
+          ) : (
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-surface-2 px-2.5 py-0.5 text-xs text-muted">
+              Faltan {daysUntilFriday} {daysUntilFriday === 1 ? "día" : "días"} para tu nómina
+            </span>
+          )}
+        </div>
         <div className="mt-1 flex items-end justify-between gap-4">
           <div>
             <p className="text-sm text-muted">Cash available</p>
@@ -37,7 +62,13 @@ export default async function Dashboard() {
               href={askCoach(
                 "Es viernes de nómina. Revisa mi saldo actual en débito, qué pagos y tarjetas vencen antes del próximo viernes, y dime exactamente qué liquidar hoy y cuánto me queda libre.",
               )}
-              className="btn bg-ok hover:opacity-90"
+              className={`btn ${
+                isPayday
+                  ? "bg-ok text-surface shadow-md ring-2 ring-ok/40 hover:opacity-90 font-bold"
+                  : isPaydayEve
+                    ? "bg-ok/90 text-surface hover:opacity-100"
+                    : "bg-surface-2 text-foreground border border-border hover:border-accent"
+              }`}
             >
               Plan de nómina
             </Link>
@@ -90,6 +121,45 @@ export default async function Dashboard() {
           >
             Ajustar con el coach →
           </Link>
+        </section>
+      )}
+
+      {primaryRelief && (
+        <section className="rounded-2xl border border-accent/25 bg-accent-soft/30 p-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-start gap-3">
+              <span className="text-2xl leading-none">🎉</span>
+              <div>
+                <p className="text-sm font-semibold text-foreground">Alivio financiero en camino</p>
+                <p className="mt-0.5 text-xs text-muted">
+                  {primaryPlan && primaryPlan.payments_left === 1 ? (
+                    <>
+                      ¡Solo te queda <b>1 pago</b> para liquidar <b>{primaryRelief.plan}</b>!
+                    </>
+                  ) : primaryPlan && primaryPlan.payments_left <= 4 ? (
+                    <>
+                      En <b>{primaryPlan.payments_left} pagos</b> ({formatShortDate(primaryRelief.last_payment)}) terminas de pagar <b>{primaryRelief.plan}</b>.
+                    </>
+                  ) : (
+                    <>
+                      El {formatShortDate(primaryRelief.last_payment)} terminas de pagar <b>{primaryRelief.plan}</b>.
+                    </>
+                  )}
+                </p>
+                {upcomingRelief[1] && (
+                  <p className="mt-1 text-[11px] text-muted">
+                    Siguiente: <b>{upcomingRelief[1].plan}</b> el {formatShortDate(upcomingRelief[1].last_payment)} (+{money(upcomingRelief[1].monthly_amount_freed, { whole: true })}/mes)
+                  </p>
+                )}
+              </div>
+            </div>
+            <div className="rounded-xl border border-accent/30 bg-surface px-3 py-1.5 text-right">
+              <span className="block text-[10px] font-medium uppercase tracking-wider text-muted">Flujo libre extra</span>
+              <span className="num text-sm font-bold text-accent">
+                +{money(primaryRelief.monthly_amount_freed, { whole: true })}/mes
+              </span>
+            </div>
+          </div>
         </section>
       )}
 
