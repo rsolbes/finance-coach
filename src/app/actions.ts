@@ -77,7 +77,7 @@ export async function saveImportAction(payload: unknown): Promise<FormState> {
   await requireAuth();
   const parsed = ImportPayload.safeParse(payload);
   if (!parsed.success) return { error: "Some rows are invalid" };
-  const { accountId, rows, newBalance } = parsed.data;
+  const { accountId, rows, newBalance, newDueDate, newStatementBalance } = parsed.data;
   const res = await insertTransactions(
     rows.map((r) => ({
       account_id: accountId,
@@ -89,7 +89,9 @@ export async function saveImportAction(payload: unknown): Promise<FormState> {
       source: "import",
     })),
   );
-  if (accountId && newBalance !== null) await setAccountBalance(accountId, newBalance);
+  if (accountId && newBalance !== null) {
+    await setAccountBalance(accountId, newBalance, newDueDate, newStatementBalance);
+  }
   refreshAll();
   return {
     ok: true,

@@ -7,7 +7,11 @@ type Linked<T> = Omit<T, "id" | "account_id" | "active"> & { account?: string };
 
 export interface SeedFile {
   /** `key` lets plans, bills and incomes point at an account. */
-  accounts: (Omit<Account, "id" | "active" | "next_due_date"> & { key: string; next_due_date?: string | null })[];
+  accounts: (Omit<Account, "id" | "active" | "next_due_date" | "statement_balance"> & {
+    key: string;
+    next_due_date?: string | null;
+    statement_balance?: number | null;
+  })[];
   plans: Linked<InstallmentPlan>[];
   bills: Linked<RecurringBill>[];
   incomes: Linked<IncomeSource>[];
@@ -25,6 +29,7 @@ export function seedToFinanceData(seed: SeedFile): FinanceData {
     accounts: seed.accounts.map(({ key, ...a }) => ({
       ...a,
       next_due_date: a.next_due_date ?? null,
+      statement_balance: a.statement_balance ?? null,
       id: ids.get(key)!,
       active: true,
     })),

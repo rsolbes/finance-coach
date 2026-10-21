@@ -61,6 +61,8 @@ export interface Account {
   payment_due_days: number | null;
   /** Known date of the next payment (fecha límite). Overrides the one computed from fecha de corte until it passes. */
   next_due_date: string | null;
+  /** Amount due on the current statement to avoid interest (pago para no generar intereses). If null, defaults to full revolving balance. */
+  statement_balance?: number | null;
   notes: string;
   active: boolean;
 }

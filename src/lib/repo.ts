@@ -29,6 +29,7 @@ const toAccount = (r: Row): Account => ({
   statement_day: num(r.statement_day),
   payment_due_days: num(r.payment_due_days),
   next_due_date: r.next_due_date ? str(r.next_due_date) : null,
+  statement_balance: num(r.statement_balance),
   notes: str(r.notes),
   active: Boolean(r.active),
 });
@@ -147,9 +148,24 @@ export async function deleteEntity(kind: EntityKind, id: number) {
   await run(`DELETE FROM ${ENTITIES[kind].table} WHERE id = ?`, [id]);
 }
 
-export async function setAccountBalance(id: number, balance: number, nextDueDate?: string | null) {
-  if (nextDueDate === undefined) await run("UPDATE accounts SET balance = ? WHERE id = ?", [balance, id]);
-  else await run("UPDATE accounts SET balance = ?, next_due_date = ? WHERE id = ?", [balance, nextDueDate, id]);
+export async function setAccountBalance(
+  id: number,
+  balance: number,
+  nextDueDate?: string | null,
+  statementBalance?: number | null,
+) {
+  const updates: string[] = ["balance = ?"];
+  const args: (string | number | null)[] = [balance];
+  if (nextDueDate !== undefined) {
+    updates.push("next_due_date = ?");
+    args.push(nextDueDate);
+  }
+  if (statementBalance !== undefined) {
+    updates.push("statement_balance = ?");
+    args.push(statementBalance);
+  }
+  args.push(id);
+  await run(`UPDATE accounts SET ${updates.join(", ")} WHERE id = ?`, args);
 }
 
 // ---------- transactions ----------

@@ -19,6 +19,8 @@ export const ImportPayload = z.object({
     )
     .max(2000),
   newBalance: z.number().finite().nullable(),
+  newDueDate: isoDate.nullable().optional(),
+  newStatementBalance: z.number().finite().nullable().optional(),
 });
 
 export const PaymentPayload = z.object({

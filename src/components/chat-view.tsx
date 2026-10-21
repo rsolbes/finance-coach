@@ -10,7 +10,6 @@ import type { ChatEvent } from "@/app/api/chat/route";
 import type { ConversationSummary } from "@/lib/repo";
 
 import { shrinkImage } from "@/lib/shrink-image";
-import type { Receipt } from "@/lib/receipt";
 
 export interface ChatBubble {
   role: "user" | "coach";
@@ -24,6 +23,17 @@ const STARTERS = [
   "¿Cuál deuda o tarjeta me conviene liquidar o amortizar primero?",
   "¿Cómo protejo mi colchón de seguridad esta quincena/semana?",
 ];
+
+async function fileToBase64(file: File): Promise<string> {
+  const buffer = await file.arrayBuffer();
+  let binary = "";
+  const bytes = new Uint8Array(buffer);
+  const len = bytes.byteLength;
+  for (let i = 0; i < len; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return btoa(binary);
+}
 
 export function ChatView(props: {
   conversations: ConversationSummary[];
@@ -79,30 +89,22 @@ export function ChatView(props: {
     setBusy(true);
 
     let message = raw;
+    let attachment: { mediaType: string; base64: string; filename: string } | null = null;
     if (file) {
-      setStatus("Leyendo comprobante");
+      setStatus("Procesando imagen");
       try {
-        const body = new FormData();
-        body.set("file", await shrinkImage(file));
-        const res = await fetch("/api/receipt", { method: "POST", body });
-        if (res.ok) {
-          const r = (await res.json()) as Receipt;
-          const details = [
-            r.date && `Fecha: ${r.date}`,
-            r.amount && `Monto: $${r.amount} MXN`,
-            r.paid_to && `Destinatario: ${r.paid_to}`,
-            r.paid_from && `Cuenta origen: ${r.paid_from}`,
-            r.reference && `Folio: ${r.reference}`,
-            r.suggested_target && `Sugerencia: pagar ${r.suggested_target}`,
-          ]
-            .filter(Boolean)
-            .join(" · ");
-          message = `[Comprobante adjunto: ${details}]\n\n${raw || "Adjunto este comprobante de pago. Por favor revísalo y regístralo si es correcto."}`;
-        } else {
-          message = `[Archivo adjunto: ${file.name}]\n\n${raw || "Adjunto este archivo."}`;
-        }
+        const shrunk = await shrinkImage(file);
+        const base64 = await fileToBase64(shrunk);
+        const mediaType = (shrunk.type || "image/jpeg") as
+          | "image/png"
+          | "image/jpeg"
+          | "image/webp"
+          | "image/gif"
+          | "application/pdf";
+        attachment = { mediaType, base64, filename: file.name };
+        message = `[📎 Comprobante adjunto: ${file.name}]\n\n${raw || "Adjunto este comprobante. Por favor revísalo y regístralo si es correcto."}`;
       } catch {
-        message = `[Archivo adjunto: ${file.name}]\n\n${raw || "Adjunto este archivo."}`;
+        message = `[📎 Archivo: ${file.name}]\n\n${raw || "Adjunto este archivo."}`;
       }
     }
 
@@ -116,7 +118,7 @@ export function ChatView(props: {
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ conversationId: activeId, message }),
+        body: JSON.stringify({ conversationId: activeId, message, attachment }),
         signal: abort.current.signal,
       });
       if (!res.ok || !res.body) {

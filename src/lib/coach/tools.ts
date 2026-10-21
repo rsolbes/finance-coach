@@ -50,7 +50,16 @@ const TOOLS = [
         ...snapshot(data, today),
         accounts: data.accounts
           .filter((a) => a.active)
-          .map((a) => ({ id: a.id, name: a.name, type: a.type, balance: a.balance, notes: a.notes })),
+          .map((a) => ({
+            id: a.id,
+            name: a.name,
+            type: a.type,
+            balance: a.balance,
+            statement_balance: a.statement_balance ?? null,
+            next_due_date: a.next_due_date,
+            statement_day: a.statement_day,
+            notes: a.notes,
+          })),
         bills: data.bills
           .filter((b) => b.active)
           .map((b) => ({ id: b.id, name: b.name, amount: b.amount, day_of_month: b.day_of_month, account_id: b.account_id })),
@@ -160,7 +169,10 @@ const TOOLS = [
       "This is how you edit anything on the user's Plan page: accounts and cards (balance, fecha de corte, next due " +
       "date...), installment plans, recurring bills, income and goals. Fields per kind (* = required for new records):\n" +
       describeRecordFields() +
-      "\nNotes: a credit card's balance is what's owed, as a positive number. A bill whose account_id is a credit " +
+      "\nNotes: a credit card's balance is what's owed, as a positive number. For credit cards, statement_balance is the " +
+      "'pago para no generar intereses' of the current statement due on next_due_date. Set statement_balance=0 if the " +
+      "user already paid this statement, or set it to the specific amount due if new charges were made after corte. " +
+      "The cash flow timeline uses statement_balance when set, preventing false deficits. A bill whose account_id is a credit " +
       "card is counted on that card's payment due date, not on the charge day. To mark a payment as made, use " +
       "record_payment instead of editing a plan. Do what the user asks; if you are inferring a change, confirm first.",
     input: z.object({
@@ -176,7 +188,13 @@ const TOOLS = [
       const acc = data.accounts.find((a) => a.id === result.id);
       const today = todayISO();
       return acc?.type === "credit"
-        ? { ...result, to_pay_in_full_now: revolvingBalance(data, acc, today), next_due: revolvingDueDate(acc, today) }
+        ? {
+            ...result,
+            statement_balance: acc.statement_balance,
+            due_this_cycle: acc.statement_balance != null ? acc.statement_balance : revolvingBalance(data, acc, today),
+            to_pay_in_full_now: revolvingBalance(data, acc, today),
+            next_due: revolvingDueDate(acc, today),
+          }
         : result;
     },
   }),

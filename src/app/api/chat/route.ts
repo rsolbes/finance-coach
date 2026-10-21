@@ -12,9 +12,16 @@ export const maxDuration = 300;
 
 type Param = Anthropic.Beta.BetaMessageParam;
 
+const AttachmentSchema = z.object({
+  mediaType: z.enum(["image/png", "image/jpeg", "image/webp", "image/gif", "application/pdf"]),
+  base64: z.string().min(1).max(10 * 1024 * 1024),
+  filename: z.string().max(200).optional(),
+});
+
 const Body = z.object({
   conversationId: z.number().int().positive().nullable().optional(),
-  message: z.string().trim().min(1).max(8000),
+  message: z.string().trim().max(8000),
+  attachment: AttachmentSchema.optional().nullable(),
 });
 
 const MAX_TOOL_ROUNDS = 10;
@@ -35,20 +42,43 @@ export async function POST(request: Request) {
   }
   const parsed = Body.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return Response.json({ error: "Invalid request" }, { status: 400 });
-  const { message } = parsed.data;
+  const { message, attachment } = parsed.data;
+  const textContent = message || (attachment ? "Analiza este comprobante o archivo adjunto." : "");
+  if (!textContent && !attachment) return Response.json({ error: "Empty message" }, { status: 400 });
   const today = todayISO();
 
   let conversationId = parsed.data.conversationId ?? null;
   let conversation = conversationId ? await getConversation(conversationId) : null;
   if (!conversation) {
-    conversationId = await createConversation(message.slice(0, 60), await buildSystemPrompt(today));
+    const title = textContent ? textContent.slice(0, 60) : `Comprobante ${today}`;
+    conversationId = await createConversation(title, await buildSystemPrompt(today));
     conversation = await getConversation(conversationId);
   }
   if (!conversation || !conversationId) return Response.json({ error: "Conversation not found" }, { status: 404 });
   const convId = conversationId;
   const system = conversation.system_prompt;
 
-  const userTurn: Param = { role: "user", content: `[Today is ${today}]\n${message}` };
+  const contentBlocks: Anthropic.Beta.BetaContentBlockParam[] = [];
+  if (attachment) {
+    if (attachment.mediaType === "application/pdf") {
+      contentBlocks.push({
+        type: "document",
+        source: { type: "base64", media_type: "application/pdf", data: attachment.base64 },
+      });
+    } else {
+      contentBlocks.push({
+        type: "image",
+        source: {
+          type: "base64",
+          media_type: attachment.mediaType as "image/png" | "image/jpeg" | "image/webp" | "image/gif",
+          data: attachment.base64,
+        },
+      });
+    }
+  }
+  contentBlocks.push({ type: "text", text: `[Today is ${today}]\n${textContent}` });
+
+  const userTurn: Param = { role: "user", content: contentBlocks };
   await appendMessages(convId, [userTurn]);
   const messages: Param[] = [...(conversation.messages as Param[]), userTurn];
 

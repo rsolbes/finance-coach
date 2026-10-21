@@ -18,6 +18,7 @@ CREATE TABLE IF NOT EXISTS accounts (
   statement_day INTEGER,
   payment_due_days INTEGER,
   next_due_date TEXT,
+  statement_balance REAL,
   notes TEXT NOT NULL DEFAULT '',
   active INTEGER NOT NULL DEFAULT 1
 );
@@ -143,6 +144,8 @@ async function migrate(client: Client) {
   const { rows } = await client.execute("PRAGMA table_info(accounts)");
   if (!rows.some((r) => r.name === "next_due_date"))
     await client.execute("ALTER TABLE accounts ADD COLUMN next_due_date TEXT");
+  if (!rows.some((r) => r.name === "statement_balance"))
+    await client.execute("ALTER TABLE accounts ADD COLUMN statement_balance REAL");
   const tx = await client.execute("PRAGMA table_info(transactions)");
   // Links a transaction to the scheduled occurrence it settles ("income:3@2026-10-02").
   if (!tx.rows.some((r) => r.name === "ref")) await client.execute("ALTER TABLE transactions ADD COLUMN ref TEXT");
@@ -160,7 +163,7 @@ async function seedIfEmpty(client: Client) {
   for (const a of seed.accounts) {
     const res = await client.execute({
       sql: `INSERT INTO accounts (name, institution, type, balance, credit_limit, statement_day, payment_due_days,
-              next_due_date, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+              next_due_date, statement_balance, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       args: [
         a.name,
         a.institution,
@@ -170,6 +173,7 @@ async function seedIfEmpty(client: Client) {
         a.statement_day,
         a.payment_due_days,
         a.next_due_date ?? null,
+        a.statement_balance ?? null,
         a.notes,
       ],
     });

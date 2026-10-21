@@ -55,6 +55,12 @@ export const ENTITIES = {
         type: "date",
         help: "Set it when you already paid the current statement, or when you don't know the fecha de corte.",
       },
+      {
+        name: "statement_balance",
+        label: "Pago para no generar intereses (este corte)",
+        type: "number",
+        help: "Solo tarjetas: lo que vence en la fecha límite actual. Pon 0 si ya liquidaste este corte, o déjalo vacío si no aplica.",
+      },
       { name: "notes", label: "Notes", type: "textarea" },
       { name: "active", label: "Active", type: "checkbox" },
     ],

@@ -36,9 +36,11 @@ export default async function PlanPage() {
     summary: `${a.name} · ${a.type === "credit" ? `owe ${money(a.balance)}` : money(a.balance)}`,
     detail:
       a.type === "credit"
-        ? `To pay in full: ${money(revolvingBalance(data, a, today))}${
-            a.statement_day ? ` · corte day ${a.statement_day}` : " · no fecha de corte set"
-          }`
+        ? `${
+            a.statement_balance != null
+              ? `Pago para no generar intereses: ${money(a.statement_balance)}${a.statement_balance === 0 ? " (liquidado 🎉)" : ""} · Total revolvente: ${money(revolvingBalance(data, a, today))}`
+              : `To pay in full: ${money(revolvingBalance(data, a, today))}`
+          }${a.next_due_date ? ` · vence ${formatShortDate(a.next_due_date)}` : a.statement_day ? ` · corte day ${a.statement_day}` : " · no fecha de corte set"}`
         : label(a.type),
   }));
 

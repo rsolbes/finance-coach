@@ -116,6 +116,27 @@ describe("cash flow", () => {
     expect(cashTimeline(poorer, TODAY, 30).first_shortfall_date).toBe(TODAY);
   });
 
+  it("uses statement_balance for card payment events when set, avoiding false deficits", () => {
+    const custom = {
+      ...data,
+      accounts: data.accounts.map((a) => (a.name === "Card A" ? { ...a, statement_balance: 1499.39 } : a)),
+    };
+    const row = cashTimeline(custom, TODAY, 30).rows.find(
+      (r) => r.kind === "card_statement" && r.account === "Card A",
+    );
+    expect(row).toBeDefined();
+    expect(row?.amount).toBe(1499.39);
+
+    const paidCard = {
+      ...data,
+      accounts: data.accounts.map((a) => (a.name === "Card A" ? { ...a, statement_balance: 0 } : a)),
+    };
+    const paidRow = cashTimeline(paidCard, TODAY, 30).rows.find(
+      (r) => r.kind === "card_statement" && r.account === "Card A",
+    );
+    expect(paidRow).toBeUndefined();
+  });
+
   it("projects months and frees money as plans end", () => {
     const months = monthlyProjection(data, TODAY, 8);
     expect(months[0].month).toBe("2026-10");

@@ -224,12 +224,12 @@ export function eventsBetween(data: FinanceData, from: string, to: string, today
   }
   for (const acc of data.accounts.filter((a) => a.active && a.type === "credit")) {
     const due = revolvingDueDate(acc, today);
-    const amount = revolvingBalance(data, acc, today);
+    const amount = acc.statement_balance != null ? acc.statement_balance : revolvingBalance(data, acc, today);
     if (!due || amount < 0.5 || due < from || due > to) continue;
     events.push({
       date: due,
       kind: "card_statement",
-      label: `${acc.name}: pay current balance (excl. installments)`,
+      label: `${acc.name}: ${acc.statement_balance != null ? "pago para no generar intereses" : "pay current balance (excl. installments)"}`,
       amount,
       account: acc.name,
       restricted: false,
@@ -386,6 +386,8 @@ export interface Snapshot {
     owed: number;
     in_installments: number;
     revolving: number;
+    statement_balance: number | null;
+    due_this_cycle: number;
     revolving_due: string | null;
     credit_limit: number | null;
   }[];
@@ -421,6 +423,8 @@ export function snapshot(data: FinanceData, today: string): Snapshot {
         owed: a.balance,
         in_installments: round2(a.balance - revolving),
         revolving,
+        statement_balance: a.statement_balance ?? null,
+        due_this_cycle: a.statement_balance != null ? a.statement_balance : revolving,
         revolving_due: revolvingDueDate(a, today),
         credit_limit: a.credit_limit,
       };

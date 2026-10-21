@@ -83,8 +83,17 @@ export function ImportStatement({ accounts }: { accounts: { id: number; name: st
       .filter((r) => r.keep)
       .map((r) => ({ date: r.date, description: r.description, amount: r.amount, category: r.category, note: r.note }));
     const newBalance = updateBalance && accountId && summary?.ending_balance != null ? summary.ending_balance : null;
+    const newDueDate = updateBalance && accountId && summary?.payment_due_date ? summary.payment_due_date : null;
+    const newStatementBalance =
+      updateBalance && accountId && summary?.payment_to_avoid_interest != null ? summary.payment_to_avoid_interest : null;
     startSaving(async () => {
-      const res = await saveImportAction({ accountId: accountId ? Number(accountId) : null, rows: kept, newBalance });
+      const res = await saveImportAction({
+        accountId: accountId ? Number(accountId) : null,
+        rows: kept,
+        newBalance,
+        newDueDate,
+        newStatementBalance,
+      });
       if (res.error) setError(res.error);
       else {
         setDone(res.message ?? "Saved");

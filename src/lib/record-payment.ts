@@ -40,6 +40,10 @@ export async function recordPayment(
         sql: "UPDATE accounts SET next_due_date = ? WHERE id = ?",
         args: [d.next_due_date, d.account_id],
       })),
+      ...(fx.statement_balances ?? []).map((s) => ({
+        sql: "UPDATE accounts SET statement_balance = ? WHERE id = ?",
+        args: [s.statement_balance, s.account_id],
+      })),
       ...fx.plans.map((p) => ({
         sql: "UPDATE plans SET payments_made = ?, next_payment_date = ? WHERE id = ?",
         args: [p.payments_made, p.next_payment_date, p.plan_id],

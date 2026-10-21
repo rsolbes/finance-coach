@@ -24,13 +24,14 @@ export function paymentTargets(data: FinanceData, today: string): PaymentTarget[
     const installments = data.plans
       .filter((p) => p.active && p.account_id === acc.id)
       .flatMap((p) => planSchedule(p, today).filter((s) => due && s.date <= due).map(() => p.payment_amount));
+    const pendingStatement = acc.statement_balance != null ? acc.statement_balance : revolvingBalance(data, acc, today);
     out.push({
       key: `card:${acc.id}`,
       kind: "card",
       id: acc.id,
       label: acc.name,
       due_date: due,
-      due_amount: round2(revolvingBalance(data, acc, today) + installments.reduce((a, b) => a + b, 0)),
+      due_amount: round2(pendingStatement + installments.reduce((a, b) => a + b, 0)),
     });
   }
   // Recurring bills paid directly (not charged to a card, which its statement covers).
@@ -78,6 +79,7 @@ export interface PaymentInput {
 export interface PaymentEffects {
   balances: { account_id: number; balance: number }[];
   due_dates: { account_id: number; next_due_date: string | null }[];
+  statement_balances?: { account_id: number; statement_balance: number | null }[];
   plans: { plan_id: number; payments_made: number; next_payment_date: string }[];
   category: Category;
   target_label: string | null;
@@ -148,6 +150,7 @@ export function paymentEffects(
       } else if (input.date <= addMonths(due, -1)) {
         fx.notes.push(`This payment is older than the statement due ${due}, so that statement is still pending.`);
       } else {
+        fx.statement_balances = [{ account_id: acc.id, statement_balance: null }];
         for (const plan of data.plans.filter((p) => p.active && p.account_id === acc.id)) {
           const covered = planSchedule(plan, today).filter((s) => s.date <= due);
           if (covered.length) {
@@ -163,6 +166,9 @@ export function paymentEffects(
             : `Statement due ${due} marked as paid.`,
         );
       }
+    } else if (acc.statement_balance != null) {
+      const remaining = round2(Math.max(0, acc.statement_balance - input.amount));
+      fx.statement_balances = [{ account_id: acc.id, statement_balance: remaining }];
     }
   } else if (kind === "plan") {
     const plan = data.plans.find((p) => p.id === id && p.active);

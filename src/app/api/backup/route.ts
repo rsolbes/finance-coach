@@ -33,6 +33,7 @@ export async function GET() {
       statement_day: a.statement_day,
       payment_due_days: a.payment_due_days,
       next_due_date: a.next_due_date,
+      statement_balance: a.statement_balance,
       notes: a.notes,
     };
   });
