@@ -1,6 +1,7 @@
 import "server-only";
 import { ENTITIES, parseEntity, type EntityKind, type FieldDef } from "../entities";
 import { deleteEntity, listEntity, saveEntity } from "../repo";
+import { recordDebtSnapshot } from "../debt-history";
 
 // Lets the coach create, change and delete the same records as the Plan page, validated by the
 // same field definitions, so it can't save anything the forms wouldn't accept.
@@ -61,6 +62,13 @@ export async function saveRecord(kind: EntityKind, id: number | undefined, field
   const parsed = parseEntity(kind, Object.fromEntries(fieldsOf(kind).map((f) => [f.name, toRaw(f, merged[f.name])])));
   if (!parsed.ok) return { error: parsed.error };
   const savedId = await saveEntity(kind, parsed.values, id);
+  if (kind === "accounts" || kind === "plans") {
+    try {
+      await recordDebtSnapshot({ source: "coach" });
+    } catch {
+      // Non-blocking
+    }
+  }
   return { saved: true, kind, id: savedId, created: !id, record: { id: savedId, ...parsed.values } };
 }
 

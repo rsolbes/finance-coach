@@ -52,6 +52,11 @@ describe("coach tools", () => {
 
     const payoff = JSON.parse((await runTool("plan_payoff", { amount: 3000, monthly_payment: 1000 })).content);
     expect(payoff.months).toBe(3);
+
+    const debtHist = JSON.parse((await runTool("get_debt_history", {})).content);
+    expect(debtHist).toHaveProperty("baseline");
+    expect(debtHist).toHaveProperty("current");
+    expect(debtHist).toHaveProperty("snapshots");
   });
 
   it("writes data: transactions, goals, balances, memories", async () => {
@@ -77,6 +82,10 @@ describe("coach tools", () => {
     expect(listed).toHaveLength(1);
     expect(listed[0]).toMatchObject({ content: "Prefers Spanish" });
     expect(JSON.parse((await runTool("forget", { id: mem.id })).content).remaining).toEqual([]);
+
+    const snap = JSON.parse((await runTool("record_debt_snapshot", { date: "2026-10-15", total_debt: 35000, notes: "Mid-month" })).content);
+    expect(snap.saved).toBe(true);
+    expect(snap.total_debt).toBe(35000);
   });
 
   it("records a payment once and refuses the same receipt twice", async () => {

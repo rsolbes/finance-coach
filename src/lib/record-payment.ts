@@ -3,6 +3,7 @@ import { db, query } from "./db";
 import { todayISO } from "./dates";
 import { paymentEffects, type PaymentInput } from "./payments";
 import { loadFinanceData } from "./repo";
+import { recordDebtSnapshot } from "./debt-history";
 
 export type RecordPaymentResult = { ok: true; message: string; notes: string[] } | { ok: false; error: string };
 
@@ -56,5 +57,10 @@ export async function recordPayment(
     ],
     "write",
   );
+  try {
+    await recordDebtSnapshot({ source: "payment", notes: `Pago: ${description}` });
+  } catch {
+    // Non-blocking for recording payments
+  }
   return { ok: true, message: `Recorded ${description} (${input.amount.toFixed(2)}).`, notes: fx.notes };
 }

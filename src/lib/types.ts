@@ -153,3 +153,43 @@ export interface FinanceData {
   /** Occurrences already recorded as done ("income:3@2026-10-02"); projections skip them. */
   settled?: ReadonlySet<string>;
 }
+
+export interface DebtBreakdownItem {
+  id: number;
+  name: string;
+  amount: number;
+  kind?: string;
+  detail?: string;
+}
+
+export interface DebtBreakdown {
+  cards: DebtBreakdownItem[];
+  loans: DebtBreakdownItem[];
+}
+
+export interface DebtSnapshot {
+  id: number;
+  date: string;
+  total_debt: number;
+  cards_debt: number;
+  loans_debt: number;
+  breakdown: DebtBreakdown;
+  source: string;
+  notes: string;
+  created_at: string;
+}
+
+export interface DebtEvolution {
+  snapshots: DebtSnapshot[];
+  current: DebtSnapshot | null;
+  baseline: DebtSnapshot | null;
+  change_from_baseline: {
+    amount: number;
+    pct: number;
+    direction: "down" | "up" | "same";
+    cards_amount: number;
+    loans_amount: number;
+  } | null;
+  days_tracked: number;
+}
+

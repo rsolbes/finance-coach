@@ -1,14 +1,20 @@
 import Link from "next/link";
 import { connection } from "next/server";
 import { Card } from "@/components/card";
+import { DebtHistoryCard } from "@/components/debt-history-card";
 import { addDays, formatMonthLabel, formatShortDate, parseISO, todayISO } from "@/lib/dates";
+import { getDebtEvolution } from "@/lib/debt-history";
 import { cashTimeline, monthlyProjection, snapshot } from "@/lib/engine";
 import { money } from "@/lib/format";
 import { getSetting, loadFinanceData } from "@/lib/repo";
 
 export default async function Dashboard() {
   await connection();
-  const [data, bufferStr] = await Promise.all([loadFinanceData(), getSetting("cash_buffer")]);
+  const [data, bufferStr, debtEvolution] = await Promise.all([
+    loadFinanceData(),
+    getSetting("cash_buffer"),
+    getDebtEvolution(),
+  ]);
   const today = todayISO();
   const cashBuffer = bufferStr ? Number(bufferStr) : 2000;
   const snap = snapshot(data, today);
@@ -185,6 +191,8 @@ export default async function Dashboard() {
           incl. future interest
         </Stat>
       </section>
+
+      <DebtHistoryCard evolution={debtEvolution} />
 
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
         <Card title="Next 3 weeks" subtitle="Running balance of your debit accounts">

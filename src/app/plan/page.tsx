@@ -1,8 +1,10 @@
 import { connection } from "next/server";
+import { DebtHistoryManager } from "@/components/debt-history-manager";
 import { EntityEditor, type EntityRow } from "@/components/entity-editor";
 import { ProfileEditor } from "@/components/profile-editor";
 import { authEnabled } from "@/lib/auth";
 import { formatShortDate, todayISO } from "@/lib/dates";
+import { ensureInitialDebtSnapshots, listDebtSnapshots } from "@/lib/debt-history";
 import { planStatus, revolvingBalance } from "@/lib/engine";
 import { label, money } from "@/lib/format";
 import { getSetting, listEntity, listGoals, listMemories, loadFinanceData } from "@/lib/repo";
@@ -11,7 +13,8 @@ import { logoutAction } from "../actions";
 export default async function PlanPage() {
   await connection();
   const today = todayISO();
-  const [data, goals, profile, bufferStr, memories, rawAccounts, rawPlans, rawBills, rawIncomes, rawGoals] =
+  await ensureInitialDebtSnapshots();
+  const [data, goals, profile, bufferStr, memories, rawAccounts, rawPlans, rawBills, rawIncomes, rawGoals, debtSnapshots] =
     await Promise.all([
       loadFinanceData(),
       listGoals(),
@@ -23,6 +26,7 @@ export default async function PlanPage() {
       listEntity("bills"),
       listEntity("incomes"),
       listEntity("goals"),
+      listDebtSnapshots(),
     ]);
   const cashBuffer = bufferStr ? Number(bufferStr) : 2000;
   const values = (raw: Record<string, unknown>[], id: number) => raw.find((r) => Number(r.id) === id) ?? {};
@@ -117,6 +121,7 @@ export default async function PlanPage() {
         <EntityEditor kind="goals" rows={goalRows} accounts={accounts} />
         <ProfileEditor profile={profile ?? ""} cashBuffer={cashBuffer} memories={memories} />
       </div>
+      <DebtHistoryManager snapshots={debtSnapshots} />
       {authEnabled() && (
         <form action={logoutAction}>
           <button className="btn btn-ghost">Log out</button>

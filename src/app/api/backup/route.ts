@@ -1,4 +1,5 @@
 import { todayISO } from "@/lib/dates";
+import { listDebtSnapshots } from "@/lib/debt-history";
 import { getSetting, listGoals, listMemories, listTransactions, loadFinanceData } from "@/lib/repo";
 import { requireAuth } from "@/lib/session";
 
@@ -10,13 +11,14 @@ export async function GET() {
   }
 
   const today = todayISO();
-  const [data, goals, profile, cashBuffer, memories, transactions] = await Promise.all([
+  const [data, goals, profile, cashBuffer, memories, transactions, debtSnapshots] = await Promise.all([
     loadFinanceData(),
     listGoals(),
     getSetting("profile"),
     getSetting("cash_buffer"),
     listMemories(),
     listTransactions({ limit: 10000 }),
+    listDebtSnapshots(),
   ]);
 
   const accountKeys = new Map<number, string>();
@@ -85,6 +87,7 @@ export async function GET() {
     goals,
     memories,
     transactions,
+    debt_snapshots: debtSnapshots,
   };
 
   const filename = `finance-backup-${today}.json`;

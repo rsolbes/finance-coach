@@ -16,6 +16,7 @@ import {
   updateTransaction,
 } from "../repo";
 import { deleteRecord, describeRecordFields, listRecords, RECORD_KINDS, saveRecord } from "./records";
+import { getDebtEvolution, recordDebtSnapshot } from "../debt-history";
 import { paymentTargets } from "../payments";
 import { MONEY_IN_CATEGORIES } from "../money-in";
 import { recordMoneyIn } from "../record-money-in";
@@ -85,6 +86,68 @@ const TOOLS = [
       "(food, transport, everything else). The current month starts today. Shows which plans end each month.",
     input: z.object({ months: z.number().int().min(1).max(36) }),
     run: async ({ months }) => monthlyProjection(await loadFinanceData(), todayISO(), months),
+  }),
+  tool({
+    name: "get_debt_history",
+    description:
+      "Tracks the history and evolution of the user's total debt over time (credit cards and independent loans like Mercado Pago). " +
+      "Shows if the debt has gone down or up since the baseline (start of project), by how much (MXN and percentage), " +
+      "days tracked, and the breakdown between cards and loans. Call this whenever the user asks if their debt has changed, " +
+      "if it's going down or up, or how much they have paid off.",
+    input: z.object({
+      from: isoDate.optional(),
+      to: isoDate.optional(),
+    }),
+    run: async ({ from, to }) => {
+      const evo = await getDebtEvolution({ from, to });
+      return {
+        summary: evo.change_from_baseline
+          ? `Deuda total ${evo.change_from_baseline.direction === "down" ? "ha bajado" : evo.change_from_baseline.direction === "up" ? "ha subido" : "se mantiene igual"}: ${Math.abs(evo.change_from_baseline.amount).toFixed(2)} (${evo.change_from_baseline.pct.toFixed(1)}%) en ${evo.days_tracked} días. Pasó de ${evo.baseline?.total_debt.toFixed(2)} a ${evo.current?.total_debt.toFixed(2)}.`
+          : "Sin historial suficiente aún",
+        baseline: evo.baseline,
+        current: evo.current,
+        change: evo.change_from_baseline,
+        days_tracked: evo.days_tracked,
+        snapshots: evo.snapshots.map((s) => ({
+          date: s.date,
+          total_debt: s.total_debt,
+          cards_debt: s.cards_debt,
+          loans_debt: s.loans_debt,
+          notes: s.notes,
+        })),
+      };
+    },
+  }),
+  tool({
+    name: "record_debt_snapshot",
+    description:
+      "Record or update a debt snapshot milestone for a specific date (or today). Use this if the user asks you to " +
+      "log a starting point, record today's debt level, or save a historical milestone.",
+    input: z.object({
+      date: isoDate.optional().describe("Date in YYYY-MM-DD. Defaults to today."),
+      total_debt: z.number().optional().describe("Custom total debt amount (optional)"),
+      cards_debt: z.number().optional().describe("Custom cards debt amount (optional)"),
+      loans_debt: z.number().optional().describe("Custom loans debt amount (optional)"),
+      notes: z.string().optional().describe("Note describing this snapshot milestone"),
+    }),
+    run: async (input) => {
+      const saved = await recordDebtSnapshot({
+        date: input.date,
+        total_debt: input.total_debt,
+        cards_debt: input.cards_debt,
+        loans_debt: input.loans_debt,
+        notes: input.notes,
+        source: "coach",
+      });
+      return {
+        saved: true,
+        date: saved.date,
+        total_debt: saved.total_debt,
+        cards_debt: saved.cards_debt,
+        loans_debt: saved.loans_debt,
+        notes: saved.notes,
+      };
+    },
   }),
   tool({
     name: "get_spending_summary",

@@ -21,6 +21,7 @@ import {
 import { ImportPayload, MoneyInPayload, PaymentPayload } from "@/lib/payloads";
 import { recordMoneyIn } from "@/lib/record-money-in";
 import { recordPayment } from "@/lib/record-payment";
+import { deleteDebtSnapshot, recordDebtSnapshot } from "@/lib/debt-history";
 import { requireAuth } from "@/lib/session";
 import { CATEGORIES } from "@/lib/types";
 
@@ -42,6 +43,13 @@ export async function saveEntityAction(kind: string, id: number | null, _prev: F
   const parsed = parseEntity(kind, raw);
   if (!parsed.ok) return { error: parsed.error };
   await saveEntity(kind, parsed.values, id ?? undefined);
+  if (kind === "accounts" || kind === "plans") {
+    try {
+      await recordDebtSnapshot({ source: "manual" });
+    } catch {
+      // Non-blocking
+    }
+  }
   refreshAll();
   return { ok: true, message: "Saved" };
 }
@@ -91,6 +99,11 @@ export async function saveImportAction(payload: unknown): Promise<FormState> {
   );
   if (accountId && newBalance !== null) {
     await setAccountBalance(accountId, newBalance, newDueDate, newStatementBalance);
+    try {
+      await recordDebtSnapshot({ source: "import" });
+    } catch {
+      // Non-blocking
+    }
   }
   refreshAll();
   return {
@@ -204,3 +217,32 @@ export async function logoutAction() {
   (await cookies()).delete(AUTH_COOKIE);
   redirect("/login");
 }
+
+export async function recordDebtSnapshotAction(_prev: FormState, form: FormData): Promise<FormState> {
+  await requireAuth();
+  const date = String(form.get("date") ?? "").trim();
+  const totalDebtStr = String(form.get("total_debt") ?? "").trim();
+  const notes = String(form.get("notes") ?? "").trim();
+  if (date && !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    return { error: "Fecha inválida (usa formato YYYY-MM-DD)" };
+  }
+  const totalDebt = totalDebtStr ? Number(totalDebtStr.replace(/[$,\s]/g, "")) : undefined;
+  if (totalDebt !== undefined && (isNaN(totalDebt) || totalDebt < 0)) {
+    return { error: "Monto de deuda inválido" };
+  }
+  await recordDebtSnapshot({
+    date: date || undefined,
+    total_debt: totalDebt,
+    notes,
+    source: "manual",
+  });
+  refreshAll();
+  return { ok: true, message: "Punto de historial registrado" };
+}
+
+export async function deleteDebtSnapshotAction(id: number) {
+  await requireAuth();
+  await deleteDebtSnapshot(id);
+  refreshAll();
+}
+

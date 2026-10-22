@@ -107,6 +107,18 @@ CREATE TABLE IF NOT EXISTS settings (
   key TEXT PRIMARY KEY,
   value TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS debt_snapshots (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  date TEXT NOT NULL UNIQUE,
+  total_debt REAL NOT NULL,
+  cards_debt REAL NOT NULL,
+  loans_debt REAL NOT NULL,
+  breakdown TEXT NOT NULL DEFAULT '{}',
+  source TEXT NOT NULL DEFAULT 'auto',
+  notes TEXT NOT NULL DEFAULT '',
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS debt_snapshots_date ON debt_snapshots(date);
 `;
 
 const globalForDb = globalThis as unknown as { coachDb?: Promise<Client> };
@@ -150,6 +162,18 @@ async function migrate(client: Client) {
   // Links a transaction to the scheduled occurrence it settles ("income:3@2026-10-02").
   if (!tx.rows.some((r) => r.name === "ref")) await client.execute("ALTER TABLE transactions ADD COLUMN ref TEXT");
   await client.execute("CREATE INDEX IF NOT EXISTS transactions_lookup ON transactions(date, account_id, amount)");
+  await client.execute(`CREATE TABLE IF NOT EXISTS debt_snapshots (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    date TEXT NOT NULL UNIQUE,
+    total_debt REAL NOT NULL,
+    cards_debt REAL NOT NULL,
+    loans_debt REAL NOT NULL,
+    breakdown TEXT NOT NULL DEFAULT '{}',
+    source TEXT NOT NULL DEFAULT 'auto',
+    notes TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  )`);
+  await client.execute("CREATE INDEX IF NOT EXISTS debt_snapshots_date ON debt_snapshots(date)");
 }
 
 /** Fills an empty database from data/seed.json (git-ignored) if it exists. */
