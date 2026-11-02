@@ -1,6 +1,6 @@
 // What happens when the user records a payment: which balances, plans and due dates change.
 // Pure functions so the rules are testable; repo/record-payment.ts applies the result.
-import { addDays, addMonths } from "./dates";
+import { addDays, addMonths, parseISO } from "./dates";
 import { planSchedule, revolvingBalance, revolvingDueDate, round2 } from "./engine";
 import { billOccurrenceFor, occurrenceKey } from "./settlement";
 import type { Category, FinanceData, InstallmentPlan, RecurringBill } from "./types";
@@ -90,10 +90,11 @@ export interface PaymentEffects {
 
 /** Marks plan payments up to and including number `lastPaid` as made, keeping the original schedule. */
 function advancePlan(plan: InstallmentPlan, lastPaid: number) {
+  const dueDay = parseISO(plan.next_payment_date).getUTCDate();
   return {
     plan_id: plan.id,
     payments_made: lastPaid,
-    next_payment_date: addMonths(plan.next_payment_date, lastPaid - plan.payments_made),
+    next_payment_date: addMonths(plan.next_payment_date, lastPaid - plan.payments_made, dueDay),
   };
 }
 
@@ -181,7 +182,8 @@ export function paymentEffects(
       fx.notes.push(`${plan.name} has no payments left.`);
     } else {
       // Due date of the payment before `next`; a receipt from on or before it paid that one (already counted).
-      const previousDue = addMonths(plan.next_payment_date, next.number - plan.payments_made - 2);
+      const dueDay = parseISO(plan.next_payment_date).getUTCDate();
+      const previousDue = addMonths(plan.next_payment_date, next.number - plan.payments_made - 2, dueDay);
       if (input.date <= previousDue) {
         fx.notes.push(`This receipt is for the payment due ${previousDue}, which was already counted.`);
       } else {

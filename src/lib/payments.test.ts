@@ -80,4 +80,37 @@ describe("paying a loan", () => {
     const res = paymentEffects(data, input({ target: `plan:${planId("Card A 15 MSI")}`, amount: 200 }), TODAY);
     expect(res).toHaveProperty("error");
   });
+
+  it("advancing a plan on the 31st preserves the 31st across short months", () => {
+    const plan31 = {
+      ...data.plans.find((p) => p.name === "Loan 1")!,
+      next_payment_date: "2026-01-31",
+      payments_made: 0,
+      total_payments: 4,
+    };
+    const customData = { ...data, plans: [plan31] };
+    // Pay payment 1 (due Jan 31) -> advances to Feb 28
+    const fx1 = paymentEffects(
+      customData,
+      input({ target: `plan:${plan31.id}`, amount: 1700, date: "2026-01-31" }),
+      "2026-01-31",
+    ) as PaymentEffects;
+    expect(fx1.plans[0]).toEqual({
+      plan_id: plan31.id,
+      payments_made: 1,
+      next_payment_date: "2026-02-28",
+    });
+
+    // Pay 2 payments at once from Jan 31 -> advances by 2 months to March 31!
+    const fx2 = paymentEffects(
+      customData,
+      input({ target: `plan:${plan31.id}`, amount: 3400, date: "2026-01-31" }),
+      "2026-01-31",
+    ) as PaymentEffects;
+    expect(fx2.plans[0]).toEqual({
+      plan_id: plan31.id,
+      payments_made: 1,
+      next_payment_date: "2026-02-28",
+    });
+  });
 });

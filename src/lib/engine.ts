@@ -6,6 +6,7 @@ import {
   diffDays,
   endOfMonth,
   monthKey,
+  parseISO,
   startOfMonth,
   withDayOfMonth,
 } from "./dates";
@@ -55,8 +56,9 @@ export interface ScheduledPayment {
 export function planSchedule(plan: InstallmentPlan, today: string): ScheduledPayment[] {
   const out: ScheduledPayment[] = [];
   const left = plan.total_payments - plan.payments_made;
+  const dueDay = parseISO(plan.next_payment_date).getUTCDate();
   for (let k = 0; k < left; k++) {
-    const date = addMonths(plan.next_payment_date, k);
+    const date = addMonths(plan.next_payment_date, k, dueDay);
     if (date >= today) out.push({ date, number: plan.payments_made + k + 1 });
   }
   return out;

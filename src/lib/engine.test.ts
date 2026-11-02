@@ -38,6 +38,23 @@ describe("plans", () => {
   it("treats past due dates as paid as time moves on", () => {
     expect(planSchedule(loan, "2026-11-02")).toHaveLength(5);
   });
+
+  it("preserves due day on the 31st across short months", () => {
+    const endOfMonthPlan = {
+      ...loan,
+      next_payment_date: "2026-01-31",
+      total_payments: 5,
+      payments_made: 0,
+    };
+    const schedule = planSchedule(endOfMonthPlan, "2026-01-01");
+    expect(schedule.map((s) => s.date)).toEqual([
+      "2026-01-31",
+      "2026-02-28", // clamped
+      "2026-03-31", // restores 31st!
+      "2026-04-30", // clamped
+      "2026-05-31", // restores 31st!
+    ]);
+  });
 });
 
 describe("credit cards", () => {
